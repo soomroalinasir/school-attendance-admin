@@ -125,6 +125,8 @@ function h(tag, attrs, ...kids) {
   return el;
 }
 const app = document.getElementById('app');
+// replaceChildren that skips empty parts (null / false / undefined from `cond && h(...)`)
+function fill(el, ...kids) { el.replaceChildren(...kids.flat(Infinity).filter(c => c != null && c !== false && c !== 0 && c !== "")); }
 const DAYS = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 let sb = null;
 const cache = {};
@@ -186,7 +188,7 @@ function modal(build) {
     let result = null;
     const dlg = h('dialog');
     const close = v => { result = v; dlg.close(); };
-    dlg.append(...[build(close)].flat());
+    dlg.append(...[build(close)].flat(Infinity).filter(x => x != null && x !== false));
     dlg.addEventListener('close', () => { dlg.remove(); resolve(result); });
     document.body.append(dlg);
     dlg.showModal();
@@ -314,11 +316,11 @@ async function boot() {
     await sb.auth.signOut();
     return loginView(error ? errText(error) : 'This account is not an admin.');
   }
-  app.replaceChildren(h('p', { class: 'center muted' }, 'Loading school data…'));
+  fill(app, h('p', { class: 'center muted' }, 'Loading school data…'));
   try {
     await reload('academic_years', 'classes', 'sections', 'subjects', 'teachers', 'students', 'teaching_assignments', 'timetable_slots');
   } catch (e) {
-    app.replaceChildren(h('div', { class: 'center card err' }, 'Could not load data: ' + errText(e)));
+    fill(app, h('div', { class: 'center card err' }, 'Could not load data: ' + errText(e)));
     return;
   }
   shell();
@@ -327,7 +329,7 @@ async function boot() {
 function configView() {
   const url = h('input', { placeholder: 'https://xxxx.supabase.co' });
   const key = h('input', { placeholder: 'anon / publishable key' });
-  app.replaceChildren(h('div', { class: 'center' }, h('div', { class: 'card' },
+  fill(app, h('div', { class: 'center' }, h('div', { class: 'card' },
     h('h2', { style: 'display:flex;gap:8px;align-items:center' }, icon('server', 22), 'Connect to your server'),
     h('p', { class: 'muted' }, 'Find these in Supabase → Project Settings → API. They are saved in this browser only.'),
     h('label', { class: 'f' }, 'Project URL'), url,
@@ -350,7 +352,7 @@ function loginView(message) {
     boot();
   };
   pw.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
-  app.replaceChildren(h('div', { class: 'center' }, h('div', { class: 'card' },
+  fill(app, h('div', { class: 'center' }, h('div', { class: 'card' },
     h('h2', { style: 'display:flex;gap:8px;align-items:center' }, icon('school', 24), 'Admin sign in'),
     h('label', { class: 'f' }, 'Email'), email,
     h('label', { class: 'f' }, 'Password'), pw, msg,
@@ -377,12 +379,12 @@ function shell() {
         onclick: () => { ui.view = id; shell(); } }, icon(ic), label))]),
     h('div', { class: 'group' }, 'Account'),
     h('button', { onclick: async () => { await sb.auth.signOut(); boot(); } }, icon('logout'), 'Sign out'));
-  app.replaceChildren(h('div', { class: 'layout' }, nav, main));
+  fill(app, h('div', { class: 'layout' }, nav, main));
   show(main);
 }
 
 async function show(main) {
-  main.replaceChildren(h('p', { class: 'muted' }, 'Loading…'));
+  fill(main, h('p', { class: 'muted' }, 'Loading…'));
   try {
     const v = ui.view;
     if (DEFS[v]) await crudView(main, v);
@@ -393,7 +395,7 @@ async function show(main) {
     else if (v === 'promotion') promotionView(main);
     else if (v === 'report') await reportView(main);
   } catch (e) {
-    main.replaceChildren(h('p', { class: 'err' }, errText(e)));
+    fill(main, h('p', { class: 'err' }, errText(e)));
   }
 }
 
@@ -461,7 +463,7 @@ async function crudView(main, table) {
 
     if (!shown.length) {
       const nothingYet = total === 0;
-      tbody.replaceChildren(h('tr', {}, h('td', { colspan: def.cols.length + 2 }, h('div', { class: 'empty' },
+      fill(tbody, h('tr', {}, h('td', { colspan: def.cols.length + 2 }, h('div', { class: 'empty' },
         icon(nothingYet ? 'inbox' : 'search', 40),
         h('p', {}, nothingYet ? `No ${def.title.toLowerCase()} yet.` : 'Nothing matches your search or filter.'),
         nothingYet
@@ -469,7 +471,7 @@ async function crudView(main, table) {
           : h('button', { onclick: () => { ui.search[table] = ''; searchInput.value = ''; render(); } }, icon('x', 16), 'Clear search')))));
       return;
     }
-    tbody.replaceChildren(...shown.map(r => {
+    fill(tbody, ...shown.map(r => {
       const pick = h('input', { type: 'checkbox', checked: selected.has(r.id), 'aria-label': 'Select row' });
       pick.addEventListener('change', () => { pick.checked ? selected.add(r.id) : selected.delete(r.id); render(); });
       return h('tr', { class: selected.has(r.id) ? 'selected' : '', ondblclick: () => editDialog(table, r, main), title: 'Double-click to edit' },
@@ -492,7 +494,7 @@ async function crudView(main, table) {
     h('div', { class: 'search' }, icon('search', 16), searchInput),
     h('button', { class: 'primary', onclick: () => editDialog(table, null, main) }, icon('plus', 16), `Add ${def.one}`));
 
-  main.replaceChildren(toolbar, def.help && h('p', { class: 'help' }, def.help), countLine, selbar,
+  fill(main, toolbar, def.help && h('p', { class: 'help' }, def.help), countLine, selbar,
     h('div', { class: 'scroll' }, h('table', {},
       h('thead', {}, h('tr', {}, h('th', { class: 'pick' }, pickAll), def.cols.map(c => h('th', {}, c[1])), h('th', {}))),
       tbody)));
@@ -688,7 +690,7 @@ async function loginsView(main) {
     } catch (e) { msg.className = 'err'; msg.textContent = errText(e); }
   };
 
-  main.replaceChildren(
+  fill(main, 
     h('div', { class: 'toolbar' }, title('Logins', 'key')),
     h('p', { class: 'help' }, 'Teachers sign in on the phone with email or phone + password. Deactivated accounts cannot sync.'),
     authError && h('p', { class: 'err' }, 'Could not list sign-ins: ' + authError),
@@ -760,15 +762,15 @@ function importView(main) {
   const template = 'admission_no,full_name,class,section,roll_no,gender,dob\r\nADM00001,Ali Khan,Grade 9,A,1,M,2011-05-04\r\n';
 
   file.addEventListener('change', async () => {
-    out.replaceChildren();
+    fill(out, );
     const text = await file.files[0].text();
     const raw = parseCsv(text);
-    if (raw.length < 2) { preview.replaceChildren(h('p', { class: 'err' }, 'The file has no data rows.')); return; }
+    if (raw.length < 2) { fill(preview, h('p', { class: 'err' }, 'The file has no data rows.')); return; }
     const header = raw[0].map(x => { const k = x.trim().toLowerCase().replace(/_/g, ' '); return ALIASES[k] || k.replace(/ /g, '_'); });
     const missing = ['admission_no', 'full_name', 'class'].filter(c => !header.includes(c));
-    if (missing.length) { preview.replaceChildren(h('p', { class: 'err' }, 'Missing column(s): ' + missing.join(', '))); return; }
+    if (missing.length) { fill(preview, h('p', { class: 'err' }, 'Missing column(s): ' + missing.join(', '))); return; }
     rows = raw.slice(1).map(r => Object.fromEntries(header.map((k, i) => [k, (r[i] || '').trim()])));
-    preview.replaceChildren(
+    fill(preview, 
       h('p', {}, `${rows.length} student(s) found. First rows:`),
       h('div', { class: 'scroll' }, h('table', {},
         h('thead', {}, h('tr', {}, IMPORT_COLS.map(c => h('th', {}, c)))),
@@ -779,24 +781,24 @@ function importView(main) {
   async function run() {
     let created = 0, updated = 0;
     const errors = [];
-    out.replaceChildren(h('p', {}, 'Importing…'));
+    fill(out, h('p', {}, 'Importing…'));
     for (let i = 0; i < rows.length; i += 500) {
       const batch = rows.slice(i, i + 500);
       const { data, error } = await sb.rpc('import_students', { p_rows: batch });
-      if (error) { out.replaceChildren(h('p', { class: 'err' }, errText(error))); return; }
+      if (error) { fill(out, h('p', { class: 'err' }, errText(error))); return; }
       created += data.created; updated += data.updated;
       for (const e of data.errors) errors.push({ ...e, line: e.line + i + 1 });
     }
     await reload('students', 'sections');
     toast(`Import done: ${created} new, ${updated} updated.`);
-    out.replaceChildren(
+    fill(out, 
       h('p', { class: 'ok' }, `Done: ${created} new, ${updated} updated, ${errors.length} with errors.`),
       errors.length && h('div', { class: 'scroll' }, h('table', {},
         h('thead', {}, h('tr', {}, h('th', {}, 'CSV line'), h('th', {}, 'Admission no.'), h('th', {}, 'Problem'))),
         h('tbody', {}, errors.map(e => h('tr', {}, h('td', {}, e.line), h('td', {}, e.admission_no || ''), h('td', { class: 'err' }, e.error)))))));
   }
 
-  main.replaceChildren(
+  fill(main, 
     h('div', { class: 'toolbar' }, title('Import students', 'upload')),
     h('p', { class: 'help' }, 'Columns: admission_no, full_name, class, section, roll_no, gender, dob (YYYY-MM-DD). ',
       'Class names must match the Classes list. Missing sections are created. Re-importing updates existing students by admission number.'),
@@ -813,7 +815,7 @@ async function timetableView(main) {
   await reload('timetable_entries', 'teaching_assignments', 'timetable_slots', 'sections');
   const ay = activeYear();
   const sections = options('sections', s => !ay || s.academic_year_id === ay.id);
-  if (!sections.length) { main.replaceChildren(h('p', { class: 'err' }, 'Create sections for the active year first.')); return; }
+  if (!sections.length) { fill(main, h('p', { class: 'err' }, 'Create sections for the active year first.')); return; }
   if (!ui.ttSection || !sections.some(s => s.id === ui.ttSection)) ui.ttSection = sections[0].id;
   const sectionId = ui.ttSection;
   const days = ui.ttSunday ? [1, 2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5, 6];
@@ -851,7 +853,7 @@ async function timetableView(main) {
     return h('td', { class: a && clash(d, slot.id, a.teacher_id) ? 'clash' : '', title: a && clash(d, slot.id, a.teacher_id) ? 'This teacher is also teaching another section at this time' : '' }, sel);
   };
 
-  main.replaceChildren(
+  fill(main, 
     h('div', { class: 'toolbar' }, title('Weekly timetable', 'table'),
       h('select', { value: sectionId, 'aria-label': 'Section', onchange: ev => { ui.ttSection = ev.target.value; show(main); } },
         sections.map(s => h('option', { value: s.id }, s.label))),
@@ -918,7 +920,7 @@ async function reportView(main) {
   const kpi = (label, value, cls = '') => h('div', { class: 'kpi ' + cls }, h('b', {}, value), h('span', {}, label));
   const withBunks = d.classes.filter(c => c.bunk_list.length);
 
-  main.replaceChildren(
+  fill(main, 
     h('div', { class: 'toolbar' }, title('Daily report', 'fileText'),
       h('button', { title: 'Previous day', 'aria-label': 'Previous day', onclick: () => step(-1) }, '‹'), dateInput,
       h('button', { title: 'Next day', 'aria-label': 'Next day', disabled: d.date >= todayYmd(), onclick: () => step(1) }, '›'),
@@ -1046,7 +1048,7 @@ async function settingsView(main) {
   ];
   const inputs = fields.map(([k, , t]) => h('input', { type: t, step: t === 'number' ? 'any' : null, value: t === 'time' ? String(data[k]).slice(0, 5) : data[k] }));
   const msg = h('p');
-  main.replaceChildren(h('div', { class: 'toolbar' }, title('School settings', 'sliders')),
+  fill(main, h('div', { class: 'toolbar' }, title('School settings', 'sliders')),
     h('div', { class: 'card' }, fields.map(([, label], i) => [h('label', { class: 'f' }, label), inputs[i]]), msg,
       h('p', {}, h('button', { class: 'primary', onclick: async () => {
         const obj = {};
@@ -1065,7 +1067,7 @@ function promotionView(main) {
   const ay = activeYear();
   if (ay) from.value = ay.id;
   const out = h('p');
-  main.replaceChildren(h('div', { class: 'toolbar' }, title('Year-end promotion', 'arrowUp')),
+  fill(main, h('div', { class: 'toolbar' }, title('Year-end promotion', 'arrowUp')),
     h('p', { class: 'help' }, 'Enrolls every active student of one year into the next class (by class order) of another year. ',
       'Same section letter is kept when it exists. Old enrollments and all attendance history are kept. Classes made by teachers are left alone. Create the new year first.'),
     h('div', { class: 'card' },
