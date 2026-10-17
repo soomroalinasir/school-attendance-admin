@@ -61,6 +61,8 @@
   .field-err { color:var(--danger); font-size:12px; margin-top:3px; }
   .invalid { border-color:var(--danger) !important; background:var(--danger-soft); }
   .hint { color:var(--muted); font-size:12px; margin-top:3px; }
+  .need { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:5px; padding:6px 10px; border-radius:8px; background:#fff3e0; color:#8a4b00; font-size:13px; }
+  .need button.link { padding:0; font-weight:600; }
   dialog { border:none; border-radius:14px; padding:22px; width:min(480px, 94vw); box-shadow:0 10px 40px rgba(0,0,0,.25); }
   dialog::backdrop { background:rgba(0,0,0,.35); }
   dialog h3 { margin:0 0 4px; display:flex; align-items:center; gap:8px; }
@@ -494,11 +496,29 @@ async function crudView(main, table) {
     h('div', { class: 'search' }, icon('search', 16), searchInput),
     h('button', { class: 'primary', onclick: () => editDialog(table, null, main) }, icon('plus', 16), `Add ${def.one}`));
 
-  fill(main, toolbar, def.help && h('p', { class: 'help' }, def.help), countLine, selbar,
+  fill(main, toolbar, def.help && h('p', { class: 'help' }, def.help), nextStepBanner(table), countLine, selbar,
     h('div', { class: 'scroll' }, h('table', {},
       h('thead', {}, h('tr', {}, h('th', { class: 'pick' }, pickAll), def.cols.map(c => h('th', {}, c[1])), h('th', {}))),
       tbody)));
   render();
+}
+
+// The school is set up in this order; point at the first step that is still missing
+const SETUP_STEPS = [
+  ['academic_years', 'Add an academic year and tick “Active”', () => !!activeYear()],
+  ['classes', 'Add your classes', () => (cache.classes || []).length > 0],
+  ['sections', 'Add a section for each class (e.g. “A”)', () => (cache.sections || []).length > 0],
+  ['subjects', 'Add the subjects', () => (cache.subjects || []).length > 0],
+  ['timetable_slots', 'Add the periods (times of the day)', () => (cache.timetable_slots || []).length > 0],
+  ['teachers', 'Add the teachers', () => (cache.teachers || []).length > 0],
+  ['students', 'Add students (or use Import students)', () => (cache.students || []).length > 0],
+];
+function nextStepBanner(current) {
+  const i = SETUP_STEPS.findIndex(([, , done]) => !done());
+  if (i < 0 || SETUP_STEPS[i][0] === current) return null;
+  const [view, text] = SETUP_STEPS[i];
+  return h('div', { class: 'banner' }, icon('alert'), h('span', {}, `Setup step ${i + 1} of ${SETUP_STEPS.length}: ${text}.`),
+    h('button', { class: 'link', onclick: () => { ui.view = view; shell(); } }, 'Go there →'));
 }
 
 function inputFor(col, value) {
@@ -542,7 +562,12 @@ function editDialog(table, row, main) {
       const wrap = c[2] === 'bool'
         ? h('label', { class: 'f', style: 'display:flex;gap:8px;align-items:center;font-weight:normal' }, el, c[1])
         : [h('label', { class: 'f' }, c[1], isRequired(c) && h('span', { class: 'req', title: 'Required' }, '*')), el];
-      return { c, el, errEl, node: [wrap, opts.hint && h('div', { class: 'hint' }, opts.hint), errEl] };
+      // empty list (e.g. no academic year yet): say so and offer to go and add one
+      const fkTable = (c[2] || '').startsWith('fk:') && c[2].slice(3);
+      const need = fkTable && DEFS[fkTable] && el.options.length <= 1 && h('div', { class: 'need' }, icon('alert', 16),
+        `No ${DEFS[fkTable].title.toLowerCase()} yet.`,
+        h('button', { class: 'link', onclick: () => { close(false); ui.view = fkTable; shell(); } }, `Add ${DEFS[fkTable].one} first →`));
+      return { c, el, errEl, node: [wrap, opts.hint && h('div', { class: 'hint' }, opts.hint), need, errEl] };
     });
     const msg = h('p', { class: 'err' });
     const progress = h('p', { class: 'ok', style: 'margin:8px 0 0' });
@@ -578,8 +603,9 @@ function editDialog(table, row, main) {
           // keep the choices that usually repeat (year, class, section, status…), clear the rest
           added++;
           for (const { c, el } of fields) {
-            if (c[2] === 'bool' || c[2].startsWith('fk:') || c[2].startsWith('select:')) continue;
-            el.value = c[2] === 'number' && c[0] === 'roll_no' && el.value ? Number(el.value) + 1 : '';
+            const type = c[2] || 'text';
+            if (type === 'bool' || type.startsWith('fk:') || type.startsWith('select:')) continue;
+            el.value = type === 'number' && c[0] === 'roll_no' && el.value ? Number(el.value) + 1 : '';
           }
           progress.textContent = `Saved ${added} so far. Add the next one.`;
           const first = fields.find(f => f.c[2] !== 'bool');
