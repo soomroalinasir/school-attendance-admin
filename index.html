@@ -310,7 +310,8 @@ async function boot() {
   try { cfg = JSON.parse(localStorage.getItem('attendance_cfg') || 'null'); } catch (_) { /* ignore */ }
   cfg = cfg || window.ATTENDANCE_CFG || null;   // config.js next to this page, if the school's server is preset
   if (!cfg) return configView();
-  sb = supabase.createClient(cfg.url, cfg.key);
+  // Own storage key: the teacher web app on the same site must not replace the admin's sign-in
+  sb = supabase.createClient(cfg.url, cfg.key, { auth: { storageKey: 'attendance-admin-session' } });
   const { data } = await sb.auth.getSession();
   if (!data.session) return loginView();
   const { data: isAdmin, error } = await sb.rpc('is_admin');
@@ -614,7 +615,9 @@ function editDialog(table, row, main) {
         }
         close(true);
       } catch (e) {
-        msg.textContent = e.code === '23505' ? 'This already exists. Check for a duplicate name or number.' : errText(e);
+        msg.textContent = e.code === '23505' ? 'This already exists. Check for a duplicate name or number.'
+          : e.code === '42501' ? 'Not allowed: this browser is not signed in as an admin any more. Use “Sign out” in the menu and sign in again with the admin account.'
+          : errText(e);
       }
     };
 
