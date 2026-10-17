@@ -1,0 +1,2 @@
+// The school's server. The anon key is public by design; data is protected by sign-in and row-level security.
+window.ATTENDANCE_CFG = { url: 'https://wztanogzdrmqdgmkgasp.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6dGFub2d6ZHJtcWRnbWtnYXNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyNTUzMzIsImV4cCI6MjEwNzgzMTMzMn0.woMbQrjrJ3C7vluFTEGwqSvqNqZvtQ7WSIZpH6ECJEc' };

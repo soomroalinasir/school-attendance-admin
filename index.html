@@ -1,0 +1,1088 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attendance Setup</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<!-- optional: window.ATTENDANCE_CFG = { url, key } so the panel opens straight at sign-in -->
+<script src="config.js" onerror="void 0"></script>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2329; --muted:#66707a; --line:#e2e5e9; --primary:#00695c; --primary-soft:#e0f2f1; --danger:#c62828; --danger-soft:#ffebee; --warn:#ef6c00; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); }
+  button, input, select, textarea { font:inherit; }
+  button { cursor:pointer; border:1px solid var(--line); background:var(--card); color:var(--text); border-radius:8px; padding:7px 12px; display:inline-flex; align-items:center; gap:6px; }
+  button:hover { border-color:#c5cad0; }
+  button.primary { background:var(--primary); color:#fff; border-color:var(--primary); }
+  button.primary:hover { filter:brightness(1.08); }
+  button.danger { color:var(--danger); }
+  button.danger.solid { background:var(--danger); color:#fff; border-color:var(--danger); }
+  button.link { border:none; background:none; color:var(--primary); padding:2px 6px; }
+  button:disabled { opacity:.5; cursor:default; }
+  input, select, textarea { border:1px solid var(--line); border-radius:8px; padding:7px 9px; background:#fff; color:var(--text); max-width:100%; }
+  input:focus, select:focus, textarea:focus { outline:2px solid var(--primary); outline-offset:-1px; border-color:var(--primary); }
+  input[type=checkbox] { width:17px; height:17px; accent-color:var(--primary); cursor:pointer; }
+  .ic { display:inline-flex; flex-shrink:0; }
+  .layout { display:flex; min-height:100vh; }
+  nav { width:240px; background:#103b36; color:#e0f2f1; padding:16px 10px; flex-shrink:0; }
+  nav h1 { font-size:17px; margin:4px 8px 16px; display:flex; align-items:center; gap:8px; }
+  nav button { display:flex; width:100%; text-align:left; background:none; border:none; color:#e0f2f1; padding:8px 10px; border-radius:6px; }
+  nav button .ic { opacity:.85; }
+  nav button.active, nav button:hover { background:rgba(255,255,255,.12); }
+  nav button.active { box-shadow:inset 3px 0 0 #80cbc4; }
+  nav .group { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#80cbc4; margin:14px 10px 4px; }
+  main { flex:1; padding:24px; min-width:0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  .toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+  .toolbar h2 { margin:0 auto 0 0; font-size:20px; display:flex; align-items:center; gap:8px; }
+  .toolbar h2 .ic { color:var(--primary); }
+  .help { color:var(--muted); margin:-4px 0 12px; max-width:760px; }
+  .search { position:relative; display:inline-flex; align-items:center; }
+  .search .ic { position:absolute; left:9px; color:var(--muted); pointer-events:none; }
+  .search input { padding-left:32px; width:240px; }
+  .selbar { display:flex; align-items:center; gap:10px; margin-bottom:10px; padding:8px 12px; background:var(--danger-soft); border-radius:10px; }
+  .selbar[hidden] { display:none; }
+  table { border-collapse:collapse; width:100%; background:var(--card); }
+  th, td { border-bottom:1px solid var(--line); padding:7px 9px; text-align:left; vertical-align:middle; }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); background:#fafbfc; position:sticky; top:0; z-index:1; }
+  tbody tr:hover { background:#f8fbfa; }
+  tbody tr.selected { background:var(--primary-soft); }
+  td.pick, th.pick { width:36px; }
+  .scroll { overflow:auto; max-height:70vh; border:1px solid var(--line); border-radius:10px; }
+  .muted { color:var(--muted); }
+  .err { color:var(--danger); white-space:pre-wrap; }
+  .ok { color:var(--primary); }
+  .center { max-width:420px; margin:10vh auto; }
+  .center .card { padding:24px; }
+  label.f { display:block; margin:12px 0 4px; font-weight:600; font-size:13px; }
+  label.f .req { color:var(--danger); margin-left:2px; }
+  label.f + input, label.f + select { width:100%; }
+  .field-err { color:var(--danger); font-size:12px; margin-top:3px; }
+  .invalid { border-color:var(--danger) !important; background:var(--danger-soft); }
+  .hint { color:var(--muted); font-size:12px; margin-top:3px; }
+  dialog { border:none; border-radius:14px; padding:22px; width:min(480px, 94vw); box-shadow:0 10px 40px rgba(0,0,0,.25); }
+  dialog::backdrop { background:rgba(0,0,0,.35); }
+  dialog h3 { margin:0 0 4px; display:flex; align-items:center; gap:8px; }
+  .dlg-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:18px; flex-wrap:wrap; }
+  .row-actions { white-space:nowrap; text-align:right; }
+  .act { border:none; background:none; padding:5px 7px; color:var(--primary); border-radius:6px; }
+  .act:hover { background:var(--primary-soft); }
+  .act.danger { color:var(--danger); }
+  .act.danger:hover { background:var(--danger-soft); }
+  .tt select { width:100%; min-width:120px; font-size:13px; padding:4px; }
+  .tt td.clash select { border-color:var(--danger); background:var(--danger-soft); }
+  .pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:12px; background:var(--primary-soft); color:var(--primary); }
+  .pill.off { background:var(--danger-soft); color:var(--danger); }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:10px; margin-bottom:16px; }
+  .kpi { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .kpi b { display:block; font-size:24px; line-height:1.2; }
+  .kpi span { color:var(--muted); font-size:13px; }
+  .kpi.good b { color:var(--primary); } .kpi.bad b { color:var(--danger); } .kpi.warn b { color:var(--warn); }
+  .banner { padding:10px 14px; border-radius:10px; background:#fff3e0; color:#8a4b00; margin-bottom:12px; display:flex; gap:8px; align-items:center; }
+  h3.sec { margin:22px 0 8px; display:flex; gap:8px; align-items:center; font-size:16px; }
+  .names { font-size:13px; color:var(--muted); max-width:420px; }
+  .empty { text-align:center; padding:40px 16px; color:var(--muted); }
+  .empty .ic { color:#b0bec5; margin-bottom:8px; }
+  .empty p { margin:6px 0 14px; }
+  #toasts { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); display:flex; flex-direction:column; gap:8px; z-index:1000; width:min(460px, 92vw); }
+  .toast { background:#263238; color:#fff; padding:10px 14px; border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,.25); display:flex; gap:8px; align-items:flex-start; animation:pop .18s ease-out; }
+  .toast.err { background:var(--danger); }
+  @keyframes pop { from { transform:translateY(8px); opacity:0; } }
+  @media (max-width: 760px) {
+    .layout { flex-direction:column; }
+    nav { width:auto; display:flex; gap:4px; overflow-x:auto; padding:8px; align-items:center; }
+    nav h1, nav .group { display:none; }
+    nav button { width:auto; white-space:nowrap; flex-shrink:0; }
+    nav button.active { box-shadow:inset 0 -3px 0 #80cbc4; }
+    main { padding:14px; }
+    .search input { width:100%; }
+    .search { flex:1; }
+    .act span { display:none; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toasts" aria-live="polite"></div>
+<script>
+'use strict';
+// ---------------------------------------------------------------------------
+// Tiny helpers
+// ---------------------------------------------------------------------------
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  const a = attrs || {};
+  for (const [k, v] of Object.entries(a)) {
+    if (v == null || v === false || k === 'value') continue;
+    if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (k === 'class') el.className = v;
+    else if (v === true) el.setAttribute(k, '');
+    else el.setAttribute(k, v);
+  }
+  for (const c of kids.flat(Infinity)) if (c != null && c !== false) el.append(c instanceof Node ? c : String(c));
+  if ('value' in a && a.value != null) el.value = a.value;
+  return el;
+}
+const app = document.getElementById('app');
+const DAYS = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+let sb = null;
+const cache = {};
+const index = {};
+const ui = { view: 'academic_years', filter: {}, search: {} };
+
+function errText(e) { return (e && (e.message || e.error_description || e.error)) || String(e); }
+
+// SVG icons (24×24 stroke icons, drawn with currentColor)
+const ICONS = {
+  school: '<path d="m2 9 10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/><path d="M22 9v6"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  layers: '<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  key: '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.3-9.3M17 6l3 3M15 8l2 2"/>',
+  users: '<circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0"/><path d="M16 4a4 4 0 0 1 0 8M22 21a7 7 0 0 0-4-6.3"/>',
+  upload: '<path d="M12 15V3M7 8l5-5 5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>',
+  download: '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>',
+  clipboard: '<rect x="6" y="4" width="12" height="18" rx="2"/><path d="M9 2h6v4H9zM9 11h6M9 15h6"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+  table: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>',
+  star: '<path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  arrowUp: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  pencil: '<path d="M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5z"/>',
+  trash: '<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  alert: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>',
+  power: '<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/>',
+  inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/>',
+  fileText: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
+  server: '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/>',
+};
+function icon(name, size = 18) {
+  const s = document.createElement('span');
+  s.className = 'ic';
+  s.innerHTML = `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+  return s;
+}
+
+// Short confirmation at the bottom of the screen
+function toast(text, kind = 'ok') {
+  const t = h('div', { class: 'toast' + (kind === 'err' ? ' err' : '') }, icon(kind === 'err' ? 'alert' : 'check'), h('span', {}, text));
+  document.getElementById('toasts').append(t);
+  setTimeout(() => t.remove(), kind === 'err' ? 6000 : 2600);
+}
+
+// Modal dialog; resolves with the value passed to close(), or null when dismissed
+function modal(build) {
+  return new Promise(resolve => {
+    let result = null;
+    const dlg = h('dialog');
+    const close = v => { result = v; dlg.close(); };
+    dlg.append(...[build(close)].flat());
+    dlg.addEventListener('close', () => { dlg.remove(); resolve(result); });
+    document.body.append(dlg);
+    dlg.showModal();
+    const first = dlg.querySelector('input:not([type=checkbox]), select, textarea');
+    if (first) first.focus();
+  });
+}
+const confirmBox = ({ title, body, ok = 'Delete', danger = true }) => modal(close => [
+  h('h3', {}, icon(danger ? 'trash' : 'alert', 20), title),
+  body && h('p', { class: 'muted' }, body),
+  h('div', { class: 'dlg-actions' },
+    h('button', { onclick: () => close(false) }, 'Cancel'),
+    h('button', { class: danger ? 'danger solid' : 'primary', onclick: () => close(true) }, ok)),
+]).then(v => v === true);
+const promptBox = ({ title, label, type = 'text', ok = 'Save' }) => modal(close => {
+  const input = h('input', { type, style: 'width:100%' });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') close(input.value); });
+  return [h('h3', {}, title), h('label', { class: 'f' }, label), input,
+    h('div', { class: 'dlg-actions' },
+      h('button', { onclick: () => close(null) }, 'Cancel'),
+      h('button', { class: 'primary', onclick: () => close(input.value) }, ok))];
+});
+
+const ORDER = {
+  academic_years: 'start_date', classes: 'sort_order', sections: 'name', subjects: 'name', teachers: 'full_name',
+  students: 'full_name', enrollments: 'roll_no', teaching_assignments: 'id', class_teacher_assignments: 'id',
+  timetable_slots: 'period_no', timetable_entries: 'id', holidays: 'date', app_users: 'created_at',
+};
+
+async function fetchAll(table) {
+  const out = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await sb.from(table).select('*').order(ORDER[table] || 'id').range(from, from + 999);
+    if (error) throw error;
+    out.push(...data);
+    if (data.length < 1000) break;
+  }
+  return out;
+}
+async function reload(...tables) {
+  for (const t of tables) {
+    cache[t] = await fetchAll(t);
+    index[t] = new Map(cache[t].map(r => [r.id, r]));
+  }
+}
+const byId = (t, id) => index[t] && index[t].get(id);
+const activeYear = () => (cache.academic_years || []).find(y => y.is_active);
+
+const LABEL = {
+  academic_years: r => r.name + (r.is_active ? ' (active)' : ''),
+  classes: r => r.name,
+  sections: r => {
+    const c = byId('classes', r.class_id), y = byId('academic_years', r.academic_year_id);
+    return `${c ? c.name : '?'} ${r.name}` + (y && !y.is_active ? ` [${y.name}]` : '');
+  },
+  subjects: r => r.name,
+  teachers: r => r.full_name + (r.employee_no ? ` (${r.employee_no})` : ''),
+  students: r => `${r.full_name} (${r.admission_no})`,
+  teaching_assignments: r => `${lab('sections', r.section_id)} · ${lab('subjects', r.subject_id)} · ${lab('teachers', r.teacher_id)}`,
+  timetable_slots: r => `P${r.period_no} ${String(r.start_time).slice(0, 5)}`,
+  enrollments: r => `${lab('students', r.student_id)} in ${lab('sections', r.section_id)}`,
+  class_teacher_assignments: r => `${lab('teachers', r.teacher_id)} for ${lab('sections', r.section_id)}`,
+  holidays: r => `${r.date}${r.description ? ' – ' + r.description : ''}`,
+};
+function lab(t, id) { const r = byId(t, id); return r ? LABEL[t](r) : (id ? '?' : ''); }
+function options(t, filterFn) {
+  return (cache[t] || []).filter(filterFn || (() => true))
+    .map(r => ({ id: r.id, label: LABEL[t](r) }))
+    .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+}
+
+// ---------------------------------------------------------------------------
+// Table definitions for generic CRUD screens (SET-1, SET-4, SET-5, SET-6, SET-8)
+// [key, label, type, opts]  type: text | number | date | time | bool | select:a,b | fk:table
+// opts: req (required), ro (shown in the list only), ph (placeholder), hint
+// ---------------------------------------------------------------------------
+const R = { req: true };
+const DEFS = {
+  academic_years: { title: 'Academic years', one: 'academic year', icon: 'calendar',
+    cols: [['name', 'Name', 'text', { req: true, ph: 'e.g. 2026-27' }], ['start_date', 'Start', 'date', R], ['end_date', 'End', 'date', R], ['is_active', 'Active', 'bool', { hint: 'Ticking this makes every other year inactive.' }]],
+    help: 'Exactly one year should be active. Teachers, imports and reports use the active year.' },
+  classes: { title: 'Classes', one: 'class', icon: 'layers',
+    cols: [['name', 'Name', 'text', { req: true, ph: 'e.g. Grade 6' }], ['level', 'Level', 'number', { ph: 'e.g. 6' }], ['sort_order', 'Order', 'number', { hint: 'Students are promoted to the class with the next order number.' }], ['created_by_teacher_id', 'Made by teacher', 'fk:teachers', { ro: true }]],
+    help: 'Order decides promotion: students move to the class with the next order number. Classes made by teachers on their phone are marked and never used for promotion.' },
+  sections: { title: 'Sections', one: 'section', icon: 'grid',
+    cols: [['class_id', 'Class', 'fk:classes', R], ['academic_year_id', 'Year', 'fk:academic_years', R], ['name', 'Section', 'text', { req: true, ph: 'A' }], ['created_by_teacher_id', 'Made by teacher', 'fk:teachers', { ro: true }]],
+    help: 'Create sections only where a class is split (A, B, C…). A class with one section still needs one section, e.g. "A".', filter: 'academic_year_id' },
+  subjects: { title: 'Subjects', one: 'subject', icon: 'book', cols: [['name', 'Name', 'text', { req: true, ph: 'e.g. Mathematics' }], ['code', 'Code', 'text', { ph: 'optional, e.g. MATH' }]] },
+  teachers: { title: 'Teachers', one: 'teacher', icon: 'user',
+    cols: [['employee_no', 'Employee no.'], ['full_name', 'Name', 'text', R], ['phone', 'Phone', 'text', { ph: '+923001234567' }], ['email', 'Email', 'text', { ph: 'name@school.pk' }], ['is_active', 'Active', 'bool']],
+    help: 'Create the sign-in for each teacher under “Logins”. Deactivating a teacher stops their phone from syncing.' },
+  students: { title: 'Students', one: 'student', icon: 'users',
+    cols: [['admission_no', 'Admission no.', 'text', R], ['full_name', 'Name', 'text', R], ['gender', 'Gender', 'select:male,female,other'], ['dob', 'Date of birth', 'date'], ['is_active', 'Active', 'bool']],
+    help: 'Use “Import students” to add many at once from a CSV file. Then put each student in a section under “Enrollments”.' },
+  enrollments: { title: 'Enrollments', one: 'enrollment', icon: 'clipboard',
+    cols: [['student_id', 'Student', 'fk:students', R], ['academic_year_id', 'Year', 'fk:academic_years', R], ['section_id', 'Section', 'fk:sections', R], ['roll_no', 'Roll no.', 'number'], ['status', 'Status', 'select:active,promoted,left,transferred', R]],
+    help: 'One enrollment per student per year. Mark students who leave as “left” instead of deleting them.', filter: 'section_id' },
+  teaching_assignments: { title: 'Teaching assignments', one: 'teaching assignment', icon: 'link',
+    cols: [['academic_year_id', 'Year', 'fk:academic_years', R], ['section_id', 'Section', 'fk:sections', R], ['subject_id', 'Subject', 'fk:subjects', R], ['teacher_id', 'Teacher', 'fk:teachers', R]],
+    help: 'Who teaches which subject to which section. Then place them on the weekly timetable.', filter: 'section_id' },
+  class_teacher_assignments: { title: 'Class teachers', one: 'class teacher', icon: 'star',
+    cols: [['academic_year_id', 'Year', 'fk:academic_years', R], ['section_id', 'Section', 'fk:sections', R], ['teacher_id', 'Teacher', 'fk:teachers', R]],
+    help: 'One class teacher per section. They can see every period of their section.' },
+  timetable_slots: { title: 'Periods (time slots)', one: 'period', icon: 'clock',
+    cols: [['period_no', 'Period', 'number', { req: true, ph: '1' }], ['start_time', 'Start', 'time', R], ['end_time', 'End', 'time', R]],
+    help: 'Usually 8 periods per day.' },
+  holidays: { title: 'Holidays', one: 'holiday', icon: 'sun',
+    cols: [['date', 'Date', 'date', R], ['description', 'Description', 'text', { ph: 'e.g. Eid ul-Fitr' }], ['scope', 'Scope', 'select:school,section', R], ['section_id', 'Section (if scope = section)', 'fk:sections']],
+    help: 'Holidays are not counted as missing submissions and are excluded from reports.' },
+};
+
+// ---------------------------------------------------------------------------
+// Boot, config, login
+// ---------------------------------------------------------------------------
+async function boot() {
+  let cfg = null;
+  try { cfg = JSON.parse(localStorage.getItem('attendance_cfg') || 'null'); } catch (_) { /* ignore */ }
+  cfg = cfg || window.ATTENDANCE_CFG || null;   // config.js next to this page, if the school's server is preset
+  if (!cfg) return configView();
+  sb = supabase.createClient(cfg.url, cfg.key);
+  const { data } = await sb.auth.getSession();
+  if (!data.session) return loginView();
+  const { data: isAdmin, error } = await sb.rpc('is_admin');
+  if (error || !isAdmin) {
+    await sb.auth.signOut();
+    return loginView(error ? errText(error) : 'This account is not an admin.');
+  }
+  app.replaceChildren(h('p', { class: 'center muted' }, 'Loading school data…'));
+  try {
+    await reload('academic_years', 'classes', 'sections', 'subjects', 'teachers', 'students', 'teaching_assignments', 'timetable_slots');
+  } catch (e) {
+    app.replaceChildren(h('div', { class: 'center card err' }, 'Could not load data: ' + errText(e)));
+    return;
+  }
+  shell();
+}
+
+function configView() {
+  const url = h('input', { placeholder: 'https://xxxx.supabase.co' });
+  const key = h('input', { placeholder: 'anon / publishable key' });
+  app.replaceChildren(h('div', { class: 'center' }, h('div', { class: 'card' },
+    h('h2', { style: 'display:flex;gap:8px;align-items:center' }, icon('server', 22), 'Connect to your server'),
+    h('p', { class: 'muted' }, 'Find these in Supabase → Project Settings → API. They are saved in this browser only.'),
+    h('label', { class: 'f' }, 'Project URL'), url,
+    h('label', { class: 'f' }, 'Anon (public) key'), key,
+    h('p', {}, h('button', { class: 'primary', onclick: () => {
+      if (!url.value.trim() || !key.value.trim()) return;
+      localStorage.setItem('attendance_cfg', JSON.stringify({ url: url.value.trim(), key: key.value.trim() }));
+      boot();
+    } }, 'Continue')))));
+}
+
+function loginView(message) {
+  const email = h('input', { type: 'email', autocomplete: 'username' });
+  const pw = h('input', { type: 'password', autocomplete: 'current-password' });
+  const msg = h('p', { class: 'err' }, message || '');
+  const go = async () => {
+    msg.textContent = '';
+    const { error } = await sb.auth.signInWithPassword({ email: email.value.trim(), password: pw.value });
+    if (error) { msg.textContent = error.message; return; }
+    boot();
+  };
+  pw.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  app.replaceChildren(h('div', { class: 'center' }, h('div', { class: 'card' },
+    h('h2', { style: 'display:flex;gap:8px;align-items:center' }, icon('school', 24), 'Admin sign in'),
+    h('label', { class: 'f' }, 'Email'), email,
+    h('label', { class: 'f' }, 'Password'), pw, msg,
+    h('p', {}, h('button', { class: 'primary', onclick: go }, 'Sign in'), ' ',
+      h('button', { class: 'link', onclick: () => { localStorage.removeItem('attendance_cfg'); configView(); } }, 'Change server')))));
+}
+
+// ---------------------------------------------------------------------------
+// Shell
+// ---------------------------------------------------------------------------
+const NAV = [
+  ['Reports', [['report', 'Daily report', 'fileText']]],
+  ['Start of year', [['academic_years', 'Academic years', 'calendar'], ['classes', 'Classes', 'layers'], ['sections', 'Sections', 'grid'], ['subjects', 'Subjects', 'book'], ['timetable_slots', 'Periods', 'clock']]],
+  ['People', [['teachers', 'Teachers', 'user'], ['logins', 'Logins', 'key'], ['students', 'Students', 'users'], ['import', 'Import students (CSV)', 'upload'], ['enrollments', 'Enrollments', 'clipboard']]],
+  ['Timetable', [['teaching_assignments', 'Teaching assignments', 'link'], ['timetable', 'Weekly timetable', 'table'], ['class_teacher_assignments', 'Class teachers', 'star']]],
+  ['Calendar & rules', [['holidays', 'Holidays', 'sun'], ['settings', 'School settings', 'sliders'], ['promotion', 'Year-end promotion', 'arrowUp']]],
+];
+
+function shell() {
+  const main = h('main');
+  const nav = h('nav', {}, h('h1', {}, icon('school', 22), 'Attendance setup'),
+    NAV.map(([group, items]) => [h('div', { class: 'group' }, group),
+      items.map(([id, label, ic]) => h('button', { class: ui.view === id ? 'active' : '', 'aria-current': ui.view === id ? 'page' : null,
+        onclick: () => { ui.view = id; shell(); } }, icon(ic), label))]),
+    h('div', { class: 'group' }, 'Account'),
+    h('button', { onclick: async () => { await sb.auth.signOut(); boot(); } }, icon('logout'), 'Sign out'));
+  app.replaceChildren(h('div', { class: 'layout' }, nav, main));
+  show(main);
+}
+
+async function show(main) {
+  main.replaceChildren(h('p', { class: 'muted' }, 'Loading…'));
+  try {
+    const v = ui.view;
+    if (DEFS[v]) await crudView(main, v);
+    else if (v === 'logins') await loginsView(main);
+    else if (v === 'import') importView(main);
+    else if (v === 'timetable') await timetableView(main);
+    else if (v === 'settings') await settingsView(main);
+    else if (v === 'promotion') promotionView(main);
+    else if (v === 'report') await reportView(main);
+  } catch (e) {
+    main.replaceChildren(h('p', { class: 'err' }, errText(e)));
+  }
+}
+
+const title = (text, ic) => h('h2', {}, ic && icon(ic, 22), text);
+
+// ---------------------------------------------------------------------------
+// Generic CRUD
+// ---------------------------------------------------------------------------
+function fmt(col, v) {
+  const [, , type = 'text'] = col;
+  if (v == null || v === '') return '';
+  if (type === 'bool') return v ? '✓' : '—';
+  if (type.startsWith('fk:')) return lab(type.slice(3), v);
+  if (type === 'time') return String(v).slice(0, 5);
+  return String(v);
+}
+function cell(col, v) {
+  const [key, , type = 'text'] = col;
+  if (type === 'bool') return h('span', { class: 'pill' + (v ? '' : ' off') }, v ? 'yes' : 'no');
+  if (key === 'created_by_teacher_id') return v ? h('span', { class: 'pill' }, lab('teachers', v)) : '';
+  return fmt(col, v);
+}
+const editable = def => def.cols.filter(c => !(c[3] && c[3].ro));
+const isRequired = c => !!(c[3] && c[3].req);
+
+async function crudView(main, table) {
+  const def = DEFS[table];
+  await reload(table);
+  const fcol = def.filter && def.cols.find(c => c[0] === def.filter);
+  const ay = activeYear();
+  if (fcol && ui.filter[table] === undefined) {
+    ui.filter[table] = def.filter === 'academic_year_id' ? (ay ? ay.id : '') : '';
+  }
+  const selected = new Set();
+
+  const searchInput = h('input', { type: 'search', placeholder: `Search ${def.title.toLowerCase()}…`, value: ui.search[table] || '',
+    'aria-label': 'Search' });
+  searchInput.addEventListener('input', () => { ui.search[table] = searchInput.value; render(); });
+  const countLine = h('p', { class: 'muted', style: 'margin:0 0 8px' });
+  const selCount = h('b');
+  const selbar = h('div', { class: 'selbar', hidden: true }, selCount,
+    h('button', { class: 'danger solid', onclick: () => removeRows(table, cache[table].filter(r => selected.has(r.id)), main) }, icon('trash', 16), 'Delete selected'),
+    h('button', { class: 'link', onclick: () => { selected.clear(); render(); } }, 'Clear selection'));
+  const pickAll = h('input', { type: 'checkbox', title: 'Select all shown', 'aria-label': 'Select all shown' });
+  const tbody = h('tbody');
+
+  const visible = () => {
+    const fval = ui.filter[table] || '';
+    const term = (ui.search[table] || '').trim().toLowerCase();
+    let rows = cache[table];
+    if (fval) rows = rows.filter(r => r[def.filter] === fval);
+    if (term) rows = rows.filter(r => def.cols.some(c => fmt(c, r[c[0]]).toLowerCase().includes(term)));
+    return rows;
+  };
+
+  function render() {
+    const rows = visible();
+    const shown = rows.slice(0, 2000);
+    const total = cache[table].length;
+    countLine.textContent = rows.length === total ? `${total} ${total === 1 ? def.one : def.title.toLowerCase()}`
+      : `${rows.length} of ${total} shown` + (rows.length > shown.length ? ` — first ${shown.length} listed, refine the search` : '');
+    selbar.hidden = selected.size === 0;
+    selCount.textContent = `${selected.size} selected`;
+    pickAll.checked = shown.length > 0 && shown.every(r => selected.has(r.id));
+
+    if (!shown.length) {
+      const nothingYet = total === 0;
+      tbody.replaceChildren(h('tr', {}, h('td', { colspan: def.cols.length + 2 }, h('div', { class: 'empty' },
+        icon(nothingYet ? 'inbox' : 'search', 40),
+        h('p', {}, nothingYet ? `No ${def.title.toLowerCase()} yet.` : 'Nothing matches your search or filter.'),
+        nothingYet
+          ? h('button', { class: 'primary', onclick: () => editDialog(table, null, main) }, icon('plus', 16), `Add the first ${def.one}`)
+          : h('button', { onclick: () => { ui.search[table] = ''; searchInput.value = ''; render(); } }, icon('x', 16), 'Clear search')))));
+      return;
+    }
+    tbody.replaceChildren(...shown.map(r => {
+      const pick = h('input', { type: 'checkbox', checked: selected.has(r.id), 'aria-label': 'Select row' });
+      pick.addEventListener('change', () => { pick.checked ? selected.add(r.id) : selected.delete(r.id); render(); });
+      return h('tr', { class: selected.has(r.id) ? 'selected' : '', ondblclick: () => editDialog(table, r, main), title: 'Double-click to edit' },
+        h('td', { class: 'pick' }, pick),
+        def.cols.map(c => h('td', {}, cell(c, r[c[0]]))),
+        h('td', { class: 'row-actions' },
+          h('button', { class: 'act', title: 'Edit', onclick: () => editDialog(table, r, main) }, icon('pencil', 16), h('span', {}, 'Edit')),
+          h('button', { class: 'act danger', title: 'Delete', onclick: () => removeRows(table, [r], main) }, icon('trash', 16), h('span', {}, 'Delete'))));
+    }));
+  }
+  pickAll.addEventListener('change', () => {
+    for (const r of visible().slice(0, 2000)) pickAll.checked ? selected.add(r.id) : selected.delete(r.id);
+    render();
+  });
+
+  const toolbar = h('div', { class: 'toolbar' }, title(def.title, def.icon),
+    fcol && h('select', { value: ui.filter[table] || '', 'aria-label': 'Filter', onchange: e => { ui.filter[table] = e.target.value; selected.clear(); render(); } },
+      h('option', { value: '' }, `All ${fcol[1].toLowerCase()}s`),
+      options(fcol[2].slice(3)).map(o => h('option', { value: o.id }, o.label))),
+    h('div', { class: 'search' }, icon('search', 16), searchInput),
+    h('button', { class: 'primary', onclick: () => editDialog(table, null, main) }, icon('plus', 16), `Add ${def.one}`));
+
+  main.replaceChildren(toolbar, def.help && h('p', { class: 'help' }, def.help), countLine, selbar,
+    h('div', { class: 'scroll' }, h('table', {},
+      h('thead', {}, h('tr', {}, h('th', { class: 'pick' }, pickAll), def.cols.map(c => h('th', {}, c[1])), h('th', {}))),
+      tbody)));
+  render();
+}
+
+function inputFor(col, value) {
+  const [key, , type = 'text', opts = {}] = col;
+  if (type === 'bool') return h('input', { type: 'checkbox', name: key, checked: !!value });
+  if (type.startsWith('select:')) {
+    return h('select', { name: key, value: value ?? '' }, h('option', { value: '' }, '— choose —'),
+      type.slice(7).split(',').map(o => h('option', { value: o }, o)));
+  }
+  if (type.startsWith('fk:')) {
+    const t = type.slice(3);
+    const filt = t === 'sections' ? (r => { const y = activeYear(); return !y || r.academic_year_id === y.id || r.id === value; }) : null;
+    return h('select', { name: key, value: value ?? '' }, h('option', { value: '' }, '— choose —'),
+      options(t, filt).map(o => h('option', { value: o.id }, o.label)));
+  }
+  const htmlType = { number: 'number', date: 'date', time: 'time' }[type] || 'text';
+  return h('input', { type: htmlType, name: key, placeholder: opts.ph || null,
+    value: value == null ? '' : (type === 'time' ? String(value).slice(0, 5) : value) });
+}
+
+function editDialog(table, row, main) {
+  const def = DEFS[table];
+  const cols = editable(def);
+  const defaults = () => {
+    const d = {};
+    const ay = activeYear();
+    if (ay && cols.some(c => c[0] === 'academic_year_id')) d.academic_year_id = ay.id;
+    if (def.filter && ui.filter[table]) d[def.filter] = ui.filter[table];
+    if (cols.some(c => c[0] === 'is_active') && table !== 'academic_years') d.is_active = true;
+    if (table === 'enrollments') d.status = 'active';
+    if (table === 'holidays') d.scope = 'school';
+    return d;
+  };
+  let added = 0;
+
+  modal(close => {
+    const fields = cols.map(c => {
+      const el = inputFor(c, (row || defaults())[c[0]]);
+      const errEl = h('div', { class: 'field-err' });
+      const opts = c[3] || {};
+      const wrap = c[2] === 'bool'
+        ? h('label', { class: 'f', style: 'display:flex;gap:8px;align-items:center;font-weight:normal' }, el, c[1])
+        : [h('label', { class: 'f' }, c[1], isRequired(c) && h('span', { class: 'req', title: 'Required' }, '*')), el];
+      return { c, el, errEl, node: [wrap, opts.hint && h('div', { class: 'hint' }, opts.hint), errEl] };
+    });
+    const msg = h('p', { class: 'err' });
+    const progress = h('p', { class: 'ok', style: 'margin:8px 0 0' });
+
+    const read = () => {
+      const obj = {};
+      let ok = true;
+      for (const { c, el, errEl } of fields) {
+        const [key, , type = 'text'] = c;
+        const raw = type === 'bool' ? el.checked : (typeof el.value === 'string' ? el.value.trim() : el.value);
+        const missing = isRequired(c) && type !== 'bool' && raw === '';
+        el.classList.toggle('invalid', missing);
+        errEl.textContent = missing ? `${c[1]} is required.` : '';
+        if (missing) ok = false;
+        obj[key] = type === 'bool' ? raw : raw === '' ? null : type === 'number' ? Number(raw) : raw;
+      }
+      return ok ? obj : null;
+    };
+
+    const save = async again => {
+      msg.textContent = '';
+      const obj = read();
+      if (!obj) { const bad = fields.find(f => f.el.classList.contains('invalid')); if (bad) bad.el.focus(); return; }
+      try {
+        if (table === 'academic_years' && obj.is_active) {
+          const { error } = await sb.from('academic_years').update({ is_active: false }).neq('id', row ? row.id : '00000000-0000-0000-0000-000000000000').eq('is_active', true);
+          if (error) throw error;
+        }
+        const { error } = row ? await sb.from(table).update(obj).eq('id', row.id) : await sb.from(table).insert(obj);
+        if (error) throw error;
+        await reload(table);
+        if (again) {
+          // keep the choices that usually repeat (year, class, section, status…), clear the rest
+          added++;
+          for (const { c, el } of fields) {
+            if (c[2] === 'bool' || c[2].startsWith('fk:') || c[2].startsWith('select:')) continue;
+            el.value = c[2] === 'number' && c[0] === 'roll_no' && el.value ? Number(el.value) + 1 : '';
+          }
+          progress.textContent = `Saved ${added} so far. Add the next one.`;
+          const first = fields.find(f => f.c[2] !== 'bool');
+          if (first) first.el.focus();
+          return;
+        }
+        close(true);
+      } catch (e) {
+        msg.textContent = e.code === '23505' ? 'This already exists. Check for a duplicate name or number.' : errText(e);
+      }
+    };
+
+    for (const { el } of fields) {
+      if (el.tagName === 'INPUT') el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); save(false); } });
+    }
+    return [
+      h('h3', {}, icon(row ? 'pencil' : 'plus', 20), (row ? 'Edit ' : 'Add ') + def.one),
+      h('p', { class: 'muted', style: 'margin:0' }, 'Fields marked * are required. Press Enter to save.'),
+      fields.map(f => f.node), progress, msg,
+      h('div', { class: 'dlg-actions' },
+        h('button', { onclick: () => close(added > 0) }, added ? 'Done' : 'Cancel'),
+        !row && h('button', { onclick: () => save(true) }, icon('plus', 16), 'Save & add another'),
+        h('button', { class: 'primary', onclick: () => save(false) }, icon('check', 16), 'Save')),
+    ];
+  }).then(changed => {
+    if (changed || added) {
+      toast(row ? `${cap(def.one)} updated.` : added > 1 ? `${added} ${def.title.toLowerCase()} added.` : `${cap(def.one)} added.`);
+      show(main);
+    }
+  });
+}
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+async function removeRows(table, rows, main) {
+  const def = DEFS[table];
+  if (!rows.length) return;
+  const one = rows.length === 1;
+  const ok = await confirmBox({
+    title: one ? `Delete ${LABEL[table] ? LABEL[table](rows[0]) : 'this ' + def.one}?` : `Delete ${rows.length} ${def.title.toLowerCase()}?`,
+    body: 'This cannot be undone.' + (def.cols.some(c => c[0] === 'is_active') ? ' To keep history, edit and untick “Active” instead.' : ''),
+  });
+  if (!ok) return;
+  let deleted = 0;
+  const inUse = [];
+  const failed = [];
+  // one statement for the lot; if something is still referenced, go row by row to find out which
+  const { error } = await sb.from(table).delete().in('id', rows.map(r => r.id));
+  if (!error) deleted = rows.length;
+  else {
+    for (const r of rows) {
+      const { error: e } = await sb.from(table).delete().eq('id', r.id);
+      if (!e) deleted++;
+      else if (e.code === '23503') inUse.push(r);
+      else failed.push(errText(e));
+    }
+  }
+  await reload(table);
+  if (deleted) toast(one ? `${cap(def.one)} deleted.` : `${deleted} deleted.`);
+  if (inUse.length) {
+    toast(`${inUse.length === 1 && one ? 'It is' : inUse.length + ' are'} still used elsewhere (attendance, enrollments or timetable), so not deleted.` +
+      (def.cols.some(c => c[0] === 'is_active') ? ' Mark them inactive instead.' : ''), 'err');
+  }
+  if (failed.length) toast(failed[0], 'err');
+  show(main);
+}
+
+// ---------------------------------------------------------------------------
+// Logins (create teacher / admin sign-ins via the admin-users Edge Function)
+// ---------------------------------------------------------------------------
+async function callUsers(body) {
+  const { data, error } = await sb.functions.invoke('admin-users', { body });
+  if (error) {
+    let m = error.message;
+    try { const j = await error.context.json(); m = j.error || m; } catch (_) { /* not JSON */ }
+    throw new Error(m + (/not found|Failed to send/i.test(m) ? ' — is the admin-users function deployed?' : ''));
+  }
+  return data;
+}
+
+async function loginsView(main) {
+  await reload('app_users', 'teachers');
+  let authUsers = [];
+  let authError = null;
+  try { authUsers = await callUsers({ action: 'list' }); } catch (e) { authError = errText(e); }
+  const authMap = new Map(authUsers.map(u => [u.auth_user_id, u]));
+  const linked = new Set(cache.app_users.map(u => u.teacher_id).filter(Boolean));
+
+  const role = h('select', {}, h('option', { value: 'teacher' }, 'Teacher'), h('option', { value: 'admin' }, 'Admin'));
+  const teacher = h('select', {}, h('option', { value: '' }, '— choose teacher —'),
+    options('teachers', t => !linked.has(t.id) && t.is_active).map(o => h('option', { value: o.id }, o.label)));
+  const email = h('input', { type: 'email', placeholder: 'teacher@school.pk' });
+  const phone = h('input', { placeholder: '+923001234567' });
+  const pw = h('input', { type: 'text', placeholder: 'at least 8 characters' });
+  const msg = h('p');
+  teacher.addEventListener('change', () => {
+    const t = byId('teachers', teacher.value);
+    if (t) { if (!email.value && t.email) email.value = t.email; if (!phone.value && t.phone) phone.value = t.phone; }
+  });
+
+  const create = async () => {
+    msg.className = ''; msg.textContent = 'Creating…';
+    try {
+      await callUsers({ action: 'create', role: role.value, teacher_id: teacher.value || null,
+        email: email.value.trim(), phone: phone.value.trim(), password: pw.value });
+      msg.textContent = '';
+      toast('Login created. Share the email/phone and password with the teacher.');
+      show(main);
+    } catch (e) { msg.className = 'err'; msg.textContent = errText(e); }
+  };
+
+  main.replaceChildren(
+    h('div', { class: 'toolbar' }, title('Logins', 'key')),
+    h('p', { class: 'help' }, 'Teachers sign in on the phone with email or phone + password. Deactivated accounts cannot sync.'),
+    authError && h('p', { class: 'err' }, 'Could not list sign-ins: ' + authError),
+    h('div', { class: 'card' }, h('h3', { style: 'margin-top:0;display:flex;gap:8px;align-items:center' }, icon('plus', 20), 'Create a login'),
+      h('label', { class: 'f' }, 'Role'), role,
+      h('label', { class: 'f' }, 'Teacher'), teacher,
+      h('label', { class: 'f' }, 'Email (or leave blank and use phone)'), email,
+      h('label', { class: 'f' }, 'Phone (international format)'), phone,
+      h('label', { class: 'f' }, 'Initial password'), pw,
+      h('p', {}, h('button', { class: 'primary', onclick: create }, icon('check', 16), 'Create login')), msg),
+    h('div', { class: 'scroll' }, h('table', {},
+      h('thead', {}, h('tr', {}, ['Sign-in', 'Role', 'Teacher', 'Status', 'Last sign-in', ''].map(x => h('th', {}, x)))),
+      h('tbody', {}, cache.app_users.map(u => {
+        const a = authMap.get(u.auth_user_id) || {};
+        return h('tr', {},
+          h('td', {}, a.email || a.phone || h('span', { class: 'muted' }, u.auth_user_id.slice(0, 8) + '…')),
+          h('td', {}, u.role),
+          h('td', {}, u.teacher_id ? lab('teachers', u.teacher_id) : '—'),
+          h('td', {}, h('span', { class: 'pill' + (u.is_active ? '' : ' off') }, u.is_active ? 'active' : 'deactivated')),
+          h('td', {}, a.last_sign_in_at ? new Date(a.last_sign_in_at).toLocaleString() : '—'),
+          h('td', { class: 'row-actions' },
+            h('button', { class: 'act', title: 'Reset password', onclick: async () => {
+              const p = await promptBox({ title: 'Reset password', label: 'New password (at least 8 characters)' });
+              if (!p) return;
+              try { await callUsers({ action: 'reset_password', auth_user_id: u.auth_user_id, password: p }); toast('Password changed.'); }
+              catch (e) { toast(errText(e), 'err'); }
+            } }, icon('key', 16), h('span', {}, 'Reset password')),
+            h('button', { class: 'act' + (u.is_active ? ' danger' : ''), title: u.is_active ? 'Deactivate' : 'Activate', onclick: async () => {
+              if (u.is_active && !await confirmBox({ title: 'Deactivate this login?', body: 'Their phone stops syncing until you activate it again.', ok: 'Deactivate' })) return;
+              const { error } = await sb.from('app_users').update({ is_active: !u.is_active }).eq('id', u.id);
+              if (error) toast(errText(error), 'err'); else { toast(u.is_active ? 'Login deactivated.' : 'Login activated.'); show(main); }
+            } }, icon('power', 16), h('span', {}, u.is_active ? 'Deactivate' : 'Activate'))));
+      })))));
+}
+
+// ---------------------------------------------------------------------------
+// CSV import (SET-2)
+// ---------------------------------------------------------------------------
+function parseCsv(text) {
+  text = text.replace(/^﻿/, '');
+  const rows = [];
+  let row = [], field = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+      else field += c;
+    } else if (c === '"') q = true;
+    else if (c === ',' || c === ';' || c === '\t') { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(field); rows.push(row); row = []; field = '';
+    } else field += c;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(x => x.trim() !== ''));
+}
+
+const IMPORT_COLS = ['admission_no', 'full_name', 'class', 'section', 'roll_no', 'gender', 'dob'];
+const ALIASES = { 'admission no': 'admission_no', admission: 'admission_no', 'adm no': 'admission_no', name: 'full_name',
+  'student name': 'full_name', 'full name': 'full_name', grade: 'class', 'roll no': 'roll_no', roll: 'roll_no', 'date of birth': 'dob' };
+
+function importView(main) {
+  const ay = activeYear();
+  const file = h('input', { type: 'file', accept: '.csv,text/csv' });
+  const preview = h('div');
+  const out = h('div');
+  let rows = [];
+  const template = 'admission_no,full_name,class,section,roll_no,gender,dob\r\nADM00001,Ali Khan,Grade 9,A,1,M,2011-05-04\r\n';
+
+  file.addEventListener('change', async () => {
+    out.replaceChildren();
+    const text = await file.files[0].text();
+    const raw = parseCsv(text);
+    if (raw.length < 2) { preview.replaceChildren(h('p', { class: 'err' }, 'The file has no data rows.')); return; }
+    const header = raw[0].map(x => { const k = x.trim().toLowerCase().replace(/_/g, ' '); return ALIASES[k] || k.replace(/ /g, '_'); });
+    const missing = ['admission_no', 'full_name', 'class'].filter(c => !header.includes(c));
+    if (missing.length) { preview.replaceChildren(h('p', { class: 'err' }, 'Missing column(s): ' + missing.join(', '))); return; }
+    rows = raw.slice(1).map(r => Object.fromEntries(header.map((k, i) => [k, (r[i] || '').trim()])));
+    preview.replaceChildren(
+      h('p', {}, `${rows.length} student(s) found. First rows:`),
+      h('div', { class: 'scroll' }, h('table', {},
+        h('thead', {}, h('tr', {}, IMPORT_COLS.map(c => h('th', {}, c)))),
+        h('tbody', {}, rows.slice(0, 8).map(r => h('tr', {}, IMPORT_COLS.map(c => h('td', {}, r[c] || ''))))))),
+      h('p', {}, h('button', { class: 'primary', onclick: run }, icon('upload', 16), `Import ${rows.length} students into ${ay ? ay.name : '(no active year!)'}`)));
+  });
+
+  async function run() {
+    let created = 0, updated = 0;
+    const errors = [];
+    out.replaceChildren(h('p', {}, 'Importing…'));
+    for (let i = 0; i < rows.length; i += 500) {
+      const batch = rows.slice(i, i + 500);
+      const { data, error } = await sb.rpc('import_students', { p_rows: batch });
+      if (error) { out.replaceChildren(h('p', { class: 'err' }, errText(error))); return; }
+      created += data.created; updated += data.updated;
+      for (const e of data.errors) errors.push({ ...e, line: e.line + i + 1 });
+    }
+    await reload('students', 'sections');
+    toast(`Import done: ${created} new, ${updated} updated.`);
+    out.replaceChildren(
+      h('p', { class: 'ok' }, `Done: ${created} new, ${updated} updated, ${errors.length} with errors.`),
+      errors.length && h('div', { class: 'scroll' }, h('table', {},
+        h('thead', {}, h('tr', {}, h('th', {}, 'CSV line'), h('th', {}, 'Admission no.'), h('th', {}, 'Problem'))),
+        h('tbody', {}, errors.map(e => h('tr', {}, h('td', {}, e.line), h('td', {}, e.admission_no || ''), h('td', { class: 'err' }, e.error)))))));
+  }
+
+  main.replaceChildren(
+    h('div', { class: 'toolbar' }, title('Import students', 'upload')),
+    h('p', { class: 'help' }, 'Columns: admission_no, full_name, class, section, roll_no, gender, dob (YYYY-MM-DD). ',
+      'Class names must match the Classes list. Missing sections are created. Re-importing updates existing students by admission number.'),
+    !ay && h('p', { class: 'err' }, 'Set an active academic year first.'),
+    h('p', {}, h('a', { href: 'data:text/csv;charset=utf-8,' + encodeURIComponent(template), download: 'students_template.csv',
+      style: 'display:inline-flex;gap:6px;align-items:center;color:var(--primary)' }, icon('download', 16), 'Download template')),
+    h('div', { class: 'card' }, file, preview, out));
+}
+
+// ---------------------------------------------------------------------------
+// Weekly timetable grid (SET-5)
+// ---------------------------------------------------------------------------
+async function timetableView(main) {
+  await reload('timetable_entries', 'teaching_assignments', 'timetable_slots', 'sections');
+  const ay = activeYear();
+  const sections = options('sections', s => !ay || s.academic_year_id === ay.id);
+  if (!sections.length) { main.replaceChildren(h('p', { class: 'err' }, 'Create sections for the active year first.')); return; }
+  if (!ui.ttSection || !sections.some(s => s.id === ui.ttSection)) ui.ttSection = sections[0].id;
+  const sectionId = ui.ttSection;
+  const days = ui.ttSunday ? [1, 2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5, 6];
+  const assignments = cache.teaching_assignments.filter(a => a.section_id === sectionId)
+    .map(a => ({ id: a.id, label: `${lab('subjects', a.subject_id)} — ${lab('teachers', a.teacher_id)}`, teacher: a.teacher_id }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const entryAt = (d, slotId) => cache.timetable_entries.find(e => e.section_id === sectionId && e.day_of_week === d && e.timetable_slot_id === slotId);
+
+  // teacher booked in another section at the same day + period?
+  const clash = (d, slotId, teacherId) => cache.timetable_entries.some(e => {
+    if (e.section_id === sectionId || e.day_of_week !== d || e.timetable_slot_id !== slotId) return false;
+    const a = byId('teaching_assignments', e.teaching_assignment_id);
+    return a && a.teacher_id === teacherId;
+  });
+
+  const msg = h('p', { class: 'err' });
+  const cell = (d, slot) => {
+    const e = entryAt(d, slot.id);
+    const a = e && byId('teaching_assignments', e.teaching_assignment_id);
+    const sel = h('select', { value: e ? e.teaching_assignment_id : '', 'aria-label': `${DAYS[d]} period ${slot.period_no}` },
+      h('option', { value: '' }, '— free —'), assignments.map(o => h('option', { value: o.id }, o.label)));
+    sel.addEventListener('change', async () => {
+      msg.textContent = '';
+      let res;
+      if (!sel.value) res = await sb.from('timetable_entries').delete().eq('id', e.id);
+      else if (e) res = await sb.from('timetable_entries').update({ teaching_assignment_id: sel.value }).eq('id', e.id);
+      else res = await sb.from('timetable_entries').insert({ teaching_assignment_id: sel.value, section_id: sectionId, day_of_week: d, timetable_slot_id: slot.id });
+      if (res.error) {
+        msg.textContent = res.error.code === '23503'
+          ? 'This period already has attendance recorded, so it cannot be removed. Change the subject instead.'
+          : errText(res.error);
+      } else toast(sel.value ? 'Timetable saved.' : 'Period cleared.');
+      show(main);
+    });
+    return h('td', { class: a && clash(d, slot.id, a.teacher_id) ? 'clash' : '', title: a && clash(d, slot.id, a.teacher_id) ? 'This teacher is also teaching another section at this time' : '' }, sel);
+  };
+
+  main.replaceChildren(
+    h('div', { class: 'toolbar' }, title('Weekly timetable', 'table'),
+      h('select', { value: sectionId, 'aria-label': 'Section', onchange: ev => { ui.ttSection = ev.target.value; show(main); } },
+        sections.map(s => h('option', { value: s.id }, s.label))),
+      h('label', { style: 'display:flex;gap:6px;align-items:center' }, h('input', { type: 'checkbox', checked: !!ui.ttSunday, onchange: ev => { ui.ttSunday = ev.target.checked; show(main); } }), 'Sunday')),
+    h('p', { class: 'help' }, 'Pick a subject and teacher for every period; choose “— free —” to clear one. Options come from Teaching assignments for this section. Red cells mean the teacher is double-booked. Changes save straight away.'),
+    !assignments.length && h('p', { class: 'err' }, 'This section has no teaching assignments yet.'),
+    msg,
+    h('div', { class: 'scroll tt' }, h('table', {},
+      h('thead', {}, h('tr', {}, h('th', {}, 'Period'), days.map(d => h('th', {}, DAYS[d])))),
+      h('tbody', {}, cache.timetable_slots.map(slot => h('tr', {},
+        h('td', {}, h('b', {}, `P${slot.period_no}`), h('div', { class: 'muted' }, `${String(slot.start_time).slice(0, 5)}–${String(slot.end_time).slice(0, 5)}`)),
+        days.map(d => cell(d, slot))))))));
+}
+
+// ---------------------------------------------------------------------------
+// Daily report (REP-1, REP-2): school totals, class-wise counts with absent names,
+// bunks and missing submissions for one date; downloadable as a PDF
+// ---------------------------------------------------------------------------
+const ymdOf = d => { const t = new Date(d); t.setMinutes(t.getMinutes() - t.getTimezoneOffset()); return t.toISOString().slice(0, 10); };
+const todayYmd = () => ymdOf(new Date());
+const prettyDate = ymd => new Date(ymd + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const pct = v => (v == null ? '–' : `${v}%`);
+const roll = s => (s.roll_no != null ? `${s.roll_no}. ` : '') + s.full_name;
+
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[src="${src}"]`)) return resolve();
+    const el = h('script', { src });
+    el.onload = resolve;
+    el.onerror = () => reject(new Error('Could not load the PDF tool. Check the internet connection.'));
+    document.head.append(el);
+  });
+}
+
+async function reportData(date) {
+  const [sum, classes, missing, settings] = await Promise.all([
+    sb.rpc('admin_day_summary', { p_date: date }),
+    sb.rpc('daily_section_summary', { p_date: date }),
+    sb.rpc('admin_missing_submissions', { p_date: date }),
+    sb.from('school_settings').select('school_name').eq('id', 1).single(),
+  ]);
+  for (const r of [sum, classes, missing]) if (r.error) throw r.error;
+  return { date, sum: sum.data, classes: classes.data || [], missing: missing.data || [],
+    school: (settings.data && settings.data.school_name) || 'School' };
+}
+
+async function reportView(main) {
+  ui.reportDate = ui.reportDate || todayYmd();
+  const d = await reportData(ui.reportDate);
+  const s = d.sum;
+  const dateInput = h('input', { type: 'date', value: d.date, max: todayYmd(), 'aria-label': 'Report date' });
+  dateInput.addEventListener('change', () => { if (dateInput.value) { ui.reportDate = dateInput.value; show(main); } });
+  const step = days => {
+    const t = new Date(d.date + 'T00:00:00');
+    t.setDate(t.getDate() + days);
+    const v = ymdOf(t);
+    if (v <= todayYmd()) { ui.reportDate = v; show(main); }
+  };
+  const pdfBtn = h('button', { class: 'primary', onclick: async () => {
+    pdfBtn.disabled = true;
+    try { await downloadDailyPdf(d); toast('PDF downloaded.'); } catch (e) { toast(errText(e), 'err'); } finally { pdfBtn.disabled = false; }
+  } }, icon('download', 16), 'Download PDF');
+
+  const kpi = (label, value, cls = '') => h('div', { class: 'kpi ' + cls }, h('b', {}, value), h('span', {}, label));
+  const withBunks = d.classes.filter(c => c.bunk_list.length);
+
+  main.replaceChildren(
+    h('div', { class: 'toolbar' }, title('Daily report', 'fileText'),
+      h('button', { title: 'Previous day', 'aria-label': 'Previous day', onclick: () => step(-1) }, '‹'), dateInput,
+      h('button', { title: 'Next day', 'aria-label': 'Next day', disabled: d.date >= todayYmd(), onclick: () => step(1) }, '›'),
+      pdfBtn),
+    h('p', { class: 'help' }, prettyDate(d.date) + '. Day attendance comes from the first period. “Left later” means present in the first period but absent in a later one.'),
+    s.holiday && h('div', { class: 'banner' }, icon('sun'), 'This day is a school holiday.'),
+    h('div', { class: 'kpis' },
+      kpi('Students', s.total_students),
+      kpi('Present', s.students_present_day, 'good'),
+      kpi('Absent', s.students_absent_day, s.students_absent_day ? 'bad' : ''),
+      kpi('On leave', s.students_leave_day),
+      kpi('Left later periods', s.bunk_students, s.bunk_students ? 'warn' : ''),
+      kpi('Attendance', pct(s.present_pct), 'good'),
+      kpi('Periods taken', `${s.submitted_periods} / ${s.scheduled_periods}`, s.submitted_periods < s.scheduled_periods ? 'warn' : 'good')),
+    h('h3', { class: 'sec' }, icon('layers'), 'Class-wise'),
+    d.classes.length
+      ? h('div', { class: 'scroll' }, h('table', {},
+        h('thead', {}, h('tr', {}, ['Class', 'Students', 'Present', 'Absent', 'Leave', '%', 'Periods taken', 'Absent students'].map(x => h('th', {}, x)))),
+        h('tbody', {}, d.classes.map(c => h('tr', {},
+          h('td', {}, h('b', {}, `${c.class_name} ${c.section_name}`)),
+          h('td', {}, c.students), h('td', {}, c.present_students), h('td', {}, c.absent_students), h('td', {}, c.leave_students),
+          h('td', {}, pct(c.present_pct)),
+          h('td', {}, h('span', { class: 'pill' + (Number(c.submitted) < Number(c.scheduled) ? ' off' : '') }, `${c.submitted}/${c.scheduled}`)),
+          h('td', { class: 'names' }, c.absent_list.map(roll).join(', ') || '—'))))))
+      : h('p', { class: 'muted' }, 'No sections in the active year yet.'),
+    withBunks.length > 0 && [h('h3', { class: 'sec' }, icon('alert'), 'Left later periods'),
+      h('div', { class: 'scroll' }, h('table', {},
+        h('thead', {}, h('tr', {}, ['Class', 'Student', 'Missed periods'].map(x => h('th', {}, x)))),
+        h('tbody', {}, withBunks.flatMap(c => c.bunk_list.map(b => h('tr', {},
+          h('td', {}, `${c.class_name} ${c.section_name}`), h('td', {}, roll(b)),
+          h('td', {}, b.periods.map(p => `P${p.period_no} ${p.subject}`).join(', '))))))))],
+    h('h3', { class: 'sec' }, icon('clock'), `Attendance not taken (${d.missing.length})`),
+    d.missing.length
+      ? h('div', { class: 'scroll' }, h('table', {},
+        h('thead', {}, h('tr', {}, ['Class', 'Period', 'Subject', 'Teacher', 'Phone'].map(x => h('th', {}, x)))),
+        h('tbody', {}, d.missing.map(m => h('tr', {},
+          h('td', {}, `${m.class_name} ${m.section_name}`), h('td', {}, `P${m.period_no} (${String(m.start_time).slice(0, 5)})`),
+          h('td', {}, m.subject_name), h('td', {}, m.teacher_name || '—'), h('td', {}, m.teacher_phone || '—'))))))
+      : h('p', { class: 'ok' }, 'Every scheduled period has attendance.'));
+}
+
+async function downloadDailyPdf(d) {
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+  const s = d.sum;
+  const teal = [0, 105, 92];
+  const W = doc.internal.pageSize.getWidth();
+  const dash = '-';   // the PDF's built-in font has no long dash
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(...teal);
+  doc.text(d.school, 40, 46);
+  doc.setFontSize(12); doc.setTextColor(40);
+  doc.text('Daily attendance report: ' + prettyDate(d.date), 40, 66);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(110);
+  doc.text('Generated ' + new Date().toLocaleString('en-GB') + '. Day attendance comes from the first period.', 40, 80);
+  if (s.holiday) { doc.setTextColor(180, 90, 0); doc.text('This day is a school holiday.', W - 40, 46, { align: 'right' }); }
+
+  const table = opts => doc.autoTable({
+    theme: 'grid', margin: { left: 40, right: 40 },
+    headStyles: { fillColor: teal, textColor: 255, fontStyle: 'bold' },
+    styles: { fontSize: 9, cellPadding: 4, overflow: 'linebreak' },
+    alternateRowStyles: { fillColor: [245, 248, 247] },
+    ...opts,
+  });
+  const after = () => doc.lastAutoTable.finalY;
+  const heading = (text, y) => {
+    if (y > doc.internal.pageSize.getHeight() - 80) { doc.addPage(); y = 50; }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(40); doc.text(text, 40, y);
+    return y + 6;
+  };
+  const pctTxt = v => (v == null ? dash : `${v}%`);
+
+  table({ startY: 92, head: [['Students', 'Present', 'Absent', 'On leave', 'Left later periods', 'Attendance', 'Periods taken']],
+    body: [[s.total_students, s.students_present_day, s.students_absent_day, s.students_leave_day, s.bunk_students,
+      pctTxt(s.present_pct), `${s.submitted_periods} / ${s.scheduled_periods}`]],
+    styles: { fontSize: 11, halign: 'center', cellPadding: 6 } });
+
+  table({ startY: heading('Class-wise', after() + 24),
+    head: [['Class', 'Students', 'Present', 'Absent', 'Leave', '%', 'Periods', 'Absent students']],
+    body: d.classes.length
+      ? d.classes.map(c => [`${c.class_name} ${c.section_name}`, c.students, c.present_students, c.absent_students,
+        c.leave_students, pctTxt(c.present_pct), `${c.submitted}/${c.scheduled}`, c.absent_list.map(roll).join(', ') || dash])
+      : [[{ content: 'No sections in the active year.', colSpan: 8 }]],
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 90 }, 1: { halign: 'center', cellWidth: 52 }, 2: { halign: 'center', cellWidth: 48 },
+      3: { halign: 'center', cellWidth: 48 }, 4: { halign: 'center', cellWidth: 42 }, 5: { halign: 'center', cellWidth: 44 },
+      6: { halign: 'center', cellWidth: 52 } } });
+
+  const bunks = d.classes.flatMap(c => c.bunk_list.map(b => [`${c.class_name} ${c.section_name}`, roll(b),
+    b.periods.map(p => `P${p.period_no} ${p.subject}`).join(', ')]));
+  if (bunks.length) {
+    table({ startY: heading('Left later periods (present in first period, absent later)', after() + 24),
+      head: [['Class', 'Student', 'Missed periods']], body: bunks, columnStyles: { 0: { cellWidth: 90 } } });
+  }
+
+  table({ startY: heading(`Attendance not taken (${d.missing.length})`, after() + 24),
+    head: [['Class', 'Period', 'Subject', 'Teacher', 'Phone']],
+    body: d.missing.length
+      ? d.missing.map(m => [`${m.class_name} ${m.section_name}`, `P${m.period_no} (${String(m.start_time).slice(0, 5)})`,
+        m.subject_name, m.teacher_name || dash, m.teacher_phone || dash])
+      : [[{ content: 'Every scheduled period has attendance.', colSpan: 5 }]],
+    columnStyles: { 0: { cellWidth: 90 } } });
+
+  const pages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130);
+    doc.text(`${d.school}  |  ${d.date}  |  page ${i} of ${pages}`, W / 2, doc.internal.pageSize.getHeight() - 20, { align: 'center' });
+  }
+  doc.save(`attendance-report-${d.date}.pdf`);
+}
+
+// ---------------------------------------------------------------------------
+// School settings, promotion
+// ---------------------------------------------------------------------------
+async function settingsView(main) {
+  const { data, error } = await sb.from('school_settings').select('*').eq('id', 1).single();
+  if (error) throw error;
+  const fields = [
+    ['school_name', 'School name', 'text'],
+    ['timezone', 'Time zone (e.g. Asia/Karachi)', 'text'],
+    ['school_end_time', 'School day ends at (teacher edit window closes)', 'time'],
+    ['low_attendance_threshold', 'Low-attendance threshold (%)', 'number'],
+    ['max_offline_days', 'Accept attendance up to this many days late from phones', 'number'],
+  ];
+  const inputs = fields.map(([k, , t]) => h('input', { type: t, step: t === 'number' ? 'any' : null, value: t === 'time' ? String(data[k]).slice(0, 5) : data[k] }));
+  const msg = h('p');
+  main.replaceChildren(h('div', { class: 'toolbar' }, title('School settings', 'sliders')),
+    h('div', { class: 'card' }, fields.map(([, label], i) => [h('label', { class: 'f' }, label), inputs[i]]), msg,
+      h('p', {}, h('button', { class: 'primary', onclick: async () => {
+        const obj = {};
+        fields.forEach(([k, , t], i) => { obj[k] = t === 'number' ? Number(inputs[i].value) : inputs[i].value; });
+        const { error: e } = await sb.from('school_settings').update(obj).eq('id', 1);
+        msg.className = e ? 'err' : '';
+        msg.textContent = e ? errText(e) : '';
+        if (!e) toast('Saved. Phones pick this up on their next sync.');
+      } }, icon('check', 16), 'Save'))));
+}
+
+function promotionView(main) {
+  const years = options('academic_years');
+  const from = h('select', {}, years.map(y => h('option', { value: y.id }, y.label)));
+  const to = h('select', {}, years.map(y => h('option', { value: y.id }, y.label)));
+  const ay = activeYear();
+  if (ay) from.value = ay.id;
+  const out = h('p');
+  main.replaceChildren(h('div', { class: 'toolbar' }, title('Year-end promotion', 'arrowUp')),
+    h('p', { class: 'help' }, 'Enrolls every active student of one year into the next class (by class order) of another year. ',
+      'Same section letter is kept when it exists. Old enrollments and all attendance history are kept. Classes made by teachers are left alone. Create the new year first.'),
+    h('div', { class: 'card' },
+      h('label', { class: 'f' }, 'From year'), from,
+      h('label', { class: 'f' }, 'To year'), to,
+      h('p', {}, h('button', { class: 'primary', onclick: async () => {
+        if (from.value === to.value) { out.className = 'err'; out.textContent = 'Choose two different years.'; return; }
+        if (!await confirmBox({ title: 'Promote all active students now?', body: 'Students are enrolled into the next class of the target year.', ok: 'Promote', danger: false })) return;
+        const { data, error } = await sb.rpc('promote_students', { p_from_year: from.value, p_to_year: to.value });
+        out.className = error ? 'err' : 'ok';
+        out.textContent = error ? errText(error)
+          : `Promoted ${data.promoted}, finished school ${data.graduated}, already enrolled ${data.skipped}. Now set the new year active.`;
+        await reload('sections');
+      } }, icon('arrowUp', 16), 'Promote')), out));
+}
+
+boot();
+</script>
+</body>
+</html>
