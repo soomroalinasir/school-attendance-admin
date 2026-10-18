@@ -167,6 +167,7 @@ const ICONS = {
   alert: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/>',
   power: '<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/>',
   inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/>',
+  award: '<circle cx="12" cy="8" r="6"/><path d="M8.2 13.2 7 22l5-3 5 3-1.2-8.8"/>',
   fileText: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
   server: '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/>',
 };
@@ -256,6 +257,32 @@ const LABEL = {
   holidays: r => `${r.date}${r.description ? ' – ' + r.description : ''}`,
 };
 function lab(t, id) { const r = byId(t, id); return r ? LABEL[t](r) : (id ? '?' : ''); }
+// Who teaches in one period (time slot): teacher → class, subject and days, from the active year's weekly timetable
+function slotTeachers(slot) {
+  const ay = activeYear();
+  const byTeacher = new Map();
+  for (const e of cache.timetable_entries || []) {
+    if (e.adhoc_date || e.timetable_slot_id !== slot.id) continue;
+    const a = byId('teaching_assignments', e.teaching_assignment_id);
+    const s = byId('sections', e.section_id);
+    if (!a || (ay && s && s.academic_year_id !== ay.id)) continue;
+    const key = `${lab('sections', a.section_id)} · ${lab('subjects', a.subject_id)}`;
+    if (!byTeacher.has(a.teacher_id)) byTeacher.set(a.teacher_id, new Map());
+    const classes = byTeacher.get(a.teacher_id);
+    if (!classes.has(key)) classes.set(key, []);
+    classes.get(key).push(e.day_of_week);
+  }
+  if (!byTeacher.size) return h('span', { class: 'muted' }, 'Not on the timetable yet');
+  const dayText = ds => {
+    ds = [...new Set(ds)].sort();
+    const run = ds.length > 2 && ds[ds.length - 1] - ds[0] === ds.length - 1;
+    return run ? `${DAYS[ds[0]]}–${DAYS[ds[ds.length - 1]]}` : ds.map(d => DAYS[d]).join(', ');
+  };
+  return [...byTeacher].map(([tid, classes]) => ({ name: lab('teachers', tid), classes }))
+    .sort((x, y) => x.name.localeCompare(y.name))
+    .map(t => h('div', {}, h('b', {}, t.name),
+      [...t.classes].map(([cls, ds]) => h('div', { class: 'muted', style: 'font-size:12px' }, `${cls} · ${dayText(ds)}`))));
+}
 function options(t, filterFn) {
   return (cache[t] || []).filter(filterFn || (() => true))
     .map(r => ({ id: r.id, label: LABEL[t](r) }))
@@ -267,38 +294,83 @@ function options(t, filterFn) {
 // [key, label, type, opts]  type: text | number | date | time | bool | select:a,b | fk:table
 // opts: req (required), ro (shown in the list only), ph (placeholder), hint
 // ---------------------------------------------------------------------------
-const R = { req: true };
 const DEFS = {
   academic_years: { title: 'Academic years', one: 'academic year', icon: 'calendar',
-    cols: [['name', 'Name', 'text', { req: true, ph: 'e.g. 2026-27' }], ['start_date', 'Start', 'date', R], ['end_date', 'End', 'date', R], ['is_active', 'Active', 'bool', { hint: 'Ticking this makes every other year inactive.' }]],
-    help: 'Exactly one year should be active. Teachers, imports and reports use the active year.' },
+    cols: [
+      ['name', 'Name', 'text', { req: true, ph: 'e.g. 2026-27', hint: 'A short name for the school year, shown on reports and marksheets.' }],
+      ['start_date', 'Start', 'date', { req: true, hint: 'First day of the school year.' }],
+      ['end_date', 'End', 'date', { req: true, hint: 'Last day of the school year. Attendance is only expected between these dates.' }],
+      ['is_active', 'Active', 'bool', { hint: 'Tick for the current year. Ticking this makes every other year inactive.' }]],
+    help: 'Exactly one year should be active. Teachers, imports, reports and results use the active year.' },
   classes: { title: 'Classes', one: 'class', icon: 'layers',
-    cols: [['name', 'Name', 'text', { req: true, ph: 'e.g. Grade 6' }], ['level', 'Level', 'number', { ph: 'e.g. 6' }], ['sort_order', 'Order', 'number', { hint: 'Students are promoted to the class with the next order number.' }], ['created_by_teacher_id', 'Made by teacher', 'fk:teachers', { ro: true }]],
+    cols: [
+      ['name', 'Name', 'text', { req: true, ph: 'e.g. Grade 6 or Matric', hint: 'The class name teachers and parents know.' }],
+      ['level', 'Level', 'number', { ph: 'e.g. 6', hint: 'Optional number for the grade (Nursery = -1, KG = 0).' }],
+      ['sort_order', 'Order', 'number', { ph: 'e.g. 7', hint: 'Lists are sorted by this number, and at year end students move to the class with the next number.' }],
+      ['created_by_teacher_id', 'Made by teacher', 'fk:teachers', { ro: true }]],
     help: 'Order decides promotion: students move to the class with the next order number. Classes made by teachers on their phone are marked and never used for promotion.' },
   sections: { title: 'Sections', one: 'section', icon: 'grid',
-    cols: [['class_id', 'Class', 'fk:classes', R], ['academic_year_id', 'Year', 'fk:academic_years', R], ['name', 'Section', 'text', { req: true, ph: 'A' }], ['created_by_teacher_id', 'Made by teacher', 'fk:teachers', { ro: true }]],
-    help: 'Create sections only where a class is split (A, B, C…). A class with one section still needs one section, e.g. "A".', filter: 'academic_year_id' },
-  subjects: { title: 'Subjects', one: 'subject', icon: 'book', cols: [['name', 'Name', 'text', { req: true, ph: 'e.g. Mathematics' }], ['code', 'Code', 'text', { ph: 'optional, e.g. MATH' }]] },
+    cols: [
+      ['class_id', 'Class', 'fk:classes', { req: true, hint: 'Which class this section belongs to.' }],
+      ['academic_year_id', 'Year', 'fk:academic_years', { req: true, hint: 'Sections are made again each school year.' }],
+      ['name', 'Section', 'text', { req: true, ph: 'A', hint: 'Usually A, B, C… Use "A" if the class is not split.' }],
+      ['created_by_teacher_id', 'Made by teacher', 'fk:teachers', { ro: true }]],
+    help: 'Create sections only where a class is split (A, B, C…). A class with one section still needs one section, e.g. "A". Students are enrolled into sections.', filter: 'academic_year_id' },
+  subjects: { title: 'Subjects', one: 'subject', icon: 'book',
+    cols: [
+      ['name', 'Name', 'text', { req: true, ph: 'e.g. Mathematics', hint: 'Shown on attendance, timetable and marksheets.' }],
+      ['code', 'Code', 'text', { ph: 'e.g. MATH', hint: 'Optional short code.' }]],
+    help: 'Subjects are used for attendance, the timetable and results.' },
   teachers: { title: 'Teachers', one: 'teacher', icon: 'user',
-    cols: [['employee_no', 'Employee no.'], ['full_name', 'Name', 'text', R], ['phone', 'Phone', 'text', { ph: '+923001234567' }], ['email', 'Email', 'text', { ph: 'name@school.pk' }], ['is_active', 'Active', 'bool']],
-    help: 'Create the sign-in for each teacher under “Logins”. Deactivating a teacher stops their phone from syncing.' },
+    cols: [
+      ['employee_no', 'Employee no.', 'text', { ph: 'e.g. T001', hint: 'Optional staff number.' }],
+      ['full_name', 'Name', 'text', { req: true, ph: 'e.g. Nasir Ali', hint: 'Full name as it should appear on reports.' }],
+      ['phone', 'Phone', 'text', { ph: '+923001234567', hint: 'Optional. Shown to the admin for periods with missing attendance.' }],
+      ['email', 'Email', 'text', { ph: 'name@school.pk', hint: 'Optional. Used to fill in the login form.' }],
+      ['is_active', 'Active', 'bool', { hint: 'Untick when a teacher leaves; their phone stops syncing.' }]],
+    help: 'After adding a teacher, create their sign-in under “Logins”. Any teacher can take attendance in any class.' },
   students: { title: 'Students', one: 'student', icon: 'users',
-    cols: [['admission_no', 'Admission no.', 'text', R], ['full_name', 'Name', 'text', R], ['gender', 'Gender', 'select:male,female,other'], ['dob', 'Date of birth', 'date'], ['is_active', 'Active', 'bool']],
-    help: 'Use “Import students” to add many at once from a CSV file. Then put each student in a section under “Enrollments”.' },
+    cols: [
+      ['admission_no', 'Admission no.', 'text', { req: true, ph: 'e.g. 1122', hint: 'Must be unique for every student.' }],
+      ['full_name', 'Name', 'text', { req: true, ph: 'e.g. Atif Ali', hint: 'Full name as it should appear on the attendance list and marksheet.' }],
+      ['gender', 'Gender', 'select:male,female,other', { hint: 'Optional.' }],
+      ['dob', 'Date of birth', 'date', { hint: 'Optional.' }],
+      ['is_active', 'Active', 'bool', { hint: 'Untick when the student leaves the school.' }]],
+    help: 'Use “Import students” to add many at once from a CSV file. Then put each student in a class under “Enrollments”, so they appear on the teacher’s attendance list.' },
   enrollments: { title: 'Enrollments', one: 'enrollment', icon: 'clipboard',
-    cols: [['student_id', 'Student', 'fk:students', R], ['academic_year_id', 'Year', 'fk:academic_years', R], ['section_id', 'Section', 'fk:sections', R], ['roll_no', 'Roll no.', 'number'], ['status', 'Status', 'select:active,promoted,left,transferred', R]],
-    help: 'One enrollment per student per year. Mark students who leave as “left” instead of deleting them.', filter: 'section_id' },
+    cols: [
+      ['student_id', 'Student', 'fk:students', { req: true, hint: 'Pick the student (name and admission no.).' }],
+      ['academic_year_id', 'Year', 'fk:academic_years', { req: true, hint: 'Usually the active year.' }],
+      ['section_id', 'Section', 'fk:sections', { req: true, hint: 'The class and section the student studies in. They appear on this class’s attendance list.' }],
+      ['roll_no', 'Roll no.', 'number', { ph: 'e.g. 1', hint: 'Order on the attendance list. Must be unique within the section.' }],
+      ['status', 'Status', 'select:active,promoted,left,transferred', { req: true, hint: '“active” = studying now. Use “left” instead of deleting, to keep history.' }]],
+    help: 'One enrollment per student per year. Enrolled students appear on the teacher’s attendance list for that class.', filter: 'section_id' },
   teaching_assignments: { title: 'Teaching assignments', one: 'teaching assignment', icon: 'link',
-    cols: [['academic_year_id', 'Year', 'fk:academic_years', R], ['section_id', 'Section', 'fk:sections', R], ['subject_id', 'Subject', 'fk:subjects', R], ['teacher_id', 'Teacher', 'fk:teachers', R]],
-    help: 'Who teaches which subject to which section. Then place them on the weekly timetable.', filter: 'section_id' },
+    cols: [
+      ['academic_year_id', 'Year', 'fk:academic_years', { req: true, hint: 'Usually the active year.' }],
+      ['section_id', 'Section', 'fk:sections', { req: true, hint: 'The class and section taught.' }],
+      ['subject_id', 'Subject', 'fk:subjects', { req: true, hint: 'The subject taught to this section.' }],
+      ['teacher_id', 'Teacher', 'fk:teachers', { req: true, hint: 'The usual teacher for this subject.' }]],
+    help: 'Who normally teaches which subject to which section. Put them on the weekly timetable so the period shows on the teacher’s “Today” list. (Teachers can still take attendance in any class.)', filter: 'section_id' },
   class_teacher_assignments: { title: 'Class teachers', one: 'class teacher', icon: 'star',
-    cols: [['academic_year_id', 'Year', 'fk:academic_years', R], ['section_id', 'Section', 'fk:sections', R], ['teacher_id', 'Teacher', 'fk:teachers', R]],
+    cols: [
+      ['academic_year_id', 'Year', 'fk:academic_years', { req: true, hint: 'Usually the active year.' }],
+      ['section_id', 'Section', 'fk:sections', { req: true, hint: 'One class teacher per section.' }],
+      ['teacher_id', 'Teacher', 'fk:teachers', { req: true, hint: 'They see every period of this section in “My class”.' }]],
     help: 'One class teacher per section. They can see every period of their section.' },
   timetable_slots: { title: 'Periods (time slots)', one: 'period', icon: 'clock',
-    cols: [['period_no', 'Period', 'number', { req: true, ph: '1' }], ['start_time', 'Start', 'time', R], ['end_time', 'End', 'time', R]],
-    help: 'Usually 8 periods per day.' },
+    cols: [
+      ['period_no', 'Period', 'number', { req: true, ph: '1', hint: 'Period number in the day: 1, 2, 3…' }],
+      ['start_time', 'Start', 'time', { req: true, hint: 'When the period starts.' }],
+      ['end_time', 'End', 'time', { req: true, hint: 'When it ends. Must be after the start.' }]],
+    help: 'The periods of the school day, usually 8. Teachers pick a period when taking attendance. “Teachers” shows who teaches each period, from the weekly timetable.',
+    needs: ['timetable_entries'], extra: ['Teachers', slotTeachers] },
   holidays: { title: 'Holidays', one: 'holiday', icon: 'sun',
-    cols: [['date', 'Date', 'date', R], ['description', 'Description', 'text', { ph: 'e.g. Eid ul-Fitr' }], ['scope', 'Scope', 'select:school,section', R], ['section_id', 'Section (if scope = section)', 'fk:sections']],
+    cols: [
+      ['date', 'Date', 'date', { req: true, hint: 'The day off.' }],
+      ['description', 'Description', 'text', { ph: 'e.g. Eid ul-Fitr', hint: 'Shown to teachers on that day.' }],
+      ['scope', 'Scope', 'select:school,section', { req: true, hint: '“school” = whole school; “section” = only one section.' }],
+      ['section_id', 'Section (if scope = section)', 'fk:sections', { hint: 'Only when Scope is “section”.' }]],
     help: 'Holidays are not counted as missing submissions and are excluded from reports.' },
 };
 
@@ -326,6 +398,10 @@ async function boot() {
     fill(app, h('div', { class: 'center card err' }, 'Could not load data: ' + errText(e)));
     return;
   }
+  // open a tab straight from a link, e.g. …/#results (used by the app's "Results & marksheets")
+  const VIEWS = ['report', 'results', 'logins', 'import', 'timetable', 'settings', 'promotion'];
+  const wanted = location.hash.slice(1);
+  if (DEFS[wanted] || VIEWS.includes(wanted)) ui.view = wanted;
   shell();
 }
 
@@ -367,7 +443,7 @@ function loginView(message) {
 // Shell
 // ---------------------------------------------------------------------------
 const NAV = [
-  ['Reports', [['report', 'Daily report', 'fileText']]],
+  ['Reports', [['report', 'Daily report', 'fileText'], ['results', 'Results & marksheets', 'award']]],
   ['Start of year', [['academic_years', 'Academic years', 'calendar'], ['classes', 'Classes', 'layers'], ['sections', 'Sections', 'grid'], ['subjects', 'Subjects', 'book'], ['timetable_slots', 'Periods', 'clock']]],
   ['People', [['teachers', 'Teachers', 'user'], ['logins', 'Logins', 'key'], ['students', 'Students', 'users'], ['import', 'Import students (CSV)', 'upload'], ['enrollments', 'Enrollments', 'clipboard']]],
   ['Timetable', [['teaching_assignments', 'Teaching assignments', 'link'], ['timetable', 'Weekly timetable', 'table'], ['class_teacher_assignments', 'Class teachers', 'star']]],
@@ -397,6 +473,7 @@ async function show(main) {
     else if (v === 'settings') await settingsView(main);
     else if (v === 'promotion') promotionView(main);
     else if (v === 'report') await reportView(main);
+    else if (v === 'results') await resultsView(main);
   } catch (e) {
     fill(main, h('p', { class: 'err' }, errText(e)));
   }
@@ -426,7 +503,7 @@ const isRequired = c => !!(c[3] && c[3].req);
 
 async function crudView(main, table) {
   const def = DEFS[table];
-  await reload(table);
+  await reload(table, ...(def.needs || []));
   const fcol = def.filter && def.cols.find(c => c[0] === def.filter);
   const ay = activeYear();
   if (fcol && ui.filter[table] === undefined) {
@@ -466,7 +543,7 @@ async function crudView(main, table) {
 
     if (!shown.length) {
       const nothingYet = total === 0;
-      fill(tbody, h('tr', {}, h('td', { colspan: def.cols.length + 2 }, h('div', { class: 'empty' },
+      fill(tbody, h('tr', {}, h('td', { colspan: def.cols.length + (def.extra ? 3 : 2) }, h('div', { class: 'empty' },
         icon(nothingYet ? 'inbox' : 'search', 40),
         h('p', {}, nothingYet ? `No ${def.title.toLowerCase()} yet.` : 'Nothing matches your search or filter.'),
         nothingYet
@@ -480,6 +557,7 @@ async function crudView(main, table) {
       return h('tr', { class: selected.has(r.id) ? 'selected' : '', ondblclick: () => editDialog(table, r, main), title: 'Double-click to edit' },
         h('td', { class: 'pick' }, pick),
         def.cols.map(c => h('td', {}, cell(c, r[c[0]]))),
+        def.extra && h('td', {}, def.extra[1](r)),
         h('td', { class: 'row-actions' },
           h('button', { class: 'act', title: 'Edit', onclick: () => editDialog(table, r, main) }, icon('pencil', 16), h('span', {}, 'Edit')),
           h('button', { class: 'act danger', title: 'Delete', onclick: () => removeRows(table, [r], main) }, icon('trash', 16), h('span', {}, 'Delete'))));
@@ -499,7 +577,7 @@ async function crudView(main, table) {
 
   fill(main, toolbar, def.help && h('p', { class: 'help' }, def.help), nextStepBanner(table), countLine, selbar,
     h('div', { class: 'scroll' }, h('table', {},
-      h('thead', {}, h('tr', {}, h('th', { class: 'pick' }, pickAll), def.cols.map(c => h('th', {}, c[1])), h('th', {}))),
+      h('thead', {}, h('tr', {}, h('th', { class: 'pick' }, pickAll), def.cols.map(c => h('th', {}, c[1])), def.extra && h('th', {}, def.extra[0]), h('th', {}))),
       tbody)));
   render();
 }
@@ -842,6 +920,7 @@ function importView(main) {
 // ---------------------------------------------------------------------------
 async function timetableView(main) {
   await reload('timetable_entries', 'teaching_assignments', 'timetable_slots', 'sections');
+  const weekly = cache.timetable_entries.filter(e => !e.adhoc_date);   // one-off extra periods are not part of the week
   const ay = activeYear();
   const sections = options('sections', s => !ay || s.academic_year_id === ay.id);
   if (!sections.length) { fill(main, h('p', { class: 'err' }, 'Create sections for the active year first.')); return; }
@@ -851,10 +930,10 @@ async function timetableView(main) {
   const assignments = cache.teaching_assignments.filter(a => a.section_id === sectionId)
     .map(a => ({ id: a.id, label: `${lab('subjects', a.subject_id)} — ${lab('teachers', a.teacher_id)}`, teacher: a.teacher_id }))
     .sort((a, b) => a.label.localeCompare(b.label));
-  const entryAt = (d, slotId) => cache.timetable_entries.find(e => e.section_id === sectionId && e.day_of_week === d && e.timetable_slot_id === slotId);
+  const entryAt = (d, slotId) => weekly.find(e => e.section_id === sectionId && e.day_of_week === d && e.timetable_slot_id === slotId);
 
   // teacher booked in another section at the same day + period?
-  const clash = (d, slotId, teacherId) => cache.timetable_entries.some(e => {
+  const clash = (d, slotId, teacherId) => weekly.some(e => {
     if (e.section_id === sectionId || e.day_of_week !== d || e.timetable_slot_id !== slotId) return false;
     const a = byId('teaching_assignments', e.teaching_assignment_id);
     return a && a.teacher_id === teacherId;
@@ -906,6 +985,7 @@ const todayYmd = () => ymdOf(new Date());
 const prettyDate = ymd => new Date(ymd + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 const pct = v => (v == null ? '–' : `${v}%`);
 const roll = s => (s.roll_no != null ? `${s.roll_no}. ` : '') + s.full_name;
+const timeOf = ts => (ts ? new Date(ts).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '');
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -918,14 +998,15 @@ function loadScript(src) {
 }
 
 async function reportData(date) {
-  const [sum, classes, missing, settings] = await Promise.all([
+  const [sum, classes, missing, settings, submitted] = await Promise.all([
     sb.rpc('admin_day_summary', { p_date: date }),
     sb.rpc('daily_section_summary', { p_date: date }),
     sb.rpc('admin_missing_submissions', { p_date: date }),
     sb.from('school_settings').select('school_name').eq('id', 1).single(),
+    sb.rpc('admin_day_submissions', { p_date: date }),
   ]);
-  for (const r of [sum, classes, missing]) if (r.error) throw r.error;
-  return { date, sum: sum.data, classes: classes.data || [], missing: missing.data || [],
+  for (const r of [sum, classes, missing, submitted]) if (r.error) throw r.error;
+  return { date, sum: sum.data, classes: classes.data || [], missing: missing.data || [], submitted: submitted.data || [],
     school: (settings.data && settings.data.school_name) || 'School' };
 }
 
@@ -981,6 +1062,17 @@ async function reportView(main) {
         h('tbody', {}, withBunks.flatMap(c => c.bunk_list.map(b => h('tr', {},
           h('td', {}, `${c.class_name} ${c.section_name}`), h('td', {}, roll(b)),
           h('td', {}, b.periods.map(p => `P${p.period_no} ${p.subject}`).join(', '))))))))],
+    h('h3', { class: 'sec' }, icon('check'), `Attendance submitted (${d.submitted.length})`),
+    d.submitted.length
+      ? h('div', { class: 'scroll' }, h('table', {},
+        h('thead', {}, h('tr', {}, ['Class', 'Period', 'Subject', 'Submitted by', 'At', 'P / A / L / LV'].map(x => h('th', {}, x)))),
+        h('tbody', {}, d.submitted.map(x => h('tr', {},
+          h('td', {}, `${x.class_name} ${x.section_name}`), h('td', {}, `P${x.period_no}`), h('td', {}, x.subject_name),
+          h('td', {}, h('b', {}, x.submitted_by), x.extra_period ? h('span', { class: 'pill', style: 'margin-left:6px' }, 'extra period')
+            : x.submitted_by !== x.timetable_teacher ? h('span', { class: 'pill', style: 'margin-left:6px' }, `substitute for ${x.timetable_teacher}`) : ''),
+          h('td', {}, timeOf(x.submitted_at)),
+          h('td', {}, `${x.present} / ${x.absent} / ${x.late} / ${x.on_leave}`))))))
+      : h('p', { class: 'muted' }, 'No attendance submitted for this day yet.'),
     h('h3', { class: 'sec' }, icon('clock'), `Attendance not taken (${d.missing.length})`),
     d.missing.length
       ? h('div', { class: 'scroll' }, h('table', {},
@@ -1046,6 +1138,15 @@ async function downloadDailyPdf(d) {
       head: [['Class', 'Student', 'Missed periods']], body: bunks, columnStyles: { 0: { cellWidth: 90 } } });
   }
 
+  table({ startY: heading(`Attendance submitted (${d.submitted.length})`, after() + 24),
+    head: [['Class', 'Period', 'Subject', 'Submitted by', 'At', 'P / A / L / LV']],
+    body: d.submitted.length
+      ? d.submitted.map(x => [`${x.class_name} ${x.section_name}`, `P${x.period_no}`, x.subject_name,
+        x.submitted_by + (x.extra_period ? ' (extra period)' : x.submitted_by !== x.timetable_teacher ? ` (for ${x.timetable_teacher})` : ''),
+        timeOf(x.submitted_at), `${x.present} / ${x.absent} / ${x.late} / ${x.on_leave}`])
+      : [[{ content: 'No attendance submitted for this day yet.', colSpan: 6 }]],
+    columnStyles: { 0: { cellWidth: 90 } } });
+
   table({ startY: heading(`Attendance not taken (${d.missing.length})`, after() + 24),
     head: [['Class', 'Period', 'Subject', 'Teacher', 'Phone']],
     body: d.missing.length
@@ -1060,6 +1161,141 @@ async function downloadDailyPdf(d) {
     doc.text(`${d.school}  |  ${d.date}  |  page ${i} of ${pages}`, W / 2, doc.internal.pageSize.getHeight() - 20, { align: 'center' });
   }
   doc.save(`attendance-report-${d.date}.pdf`);
+}
+
+// ---------------------------------------------------------------------------
+// Results: teachers enter marks per subject in the app; here the admin sees what has come in and
+// downloads one marksheet per student (all subjects, percentages) as a PDF
+// ---------------------------------------------------------------------------
+const TERM_LABEL = { monthly: 'Monthly test', midterm: 'Mid-term exam', annual: 'Annual exam' };
+const num = v => (v == null ? '' : String(Number(v)));
+
+async function loadPdfLibs() {
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+  return window.jspdf.jsPDF;
+}
+
+async function resultsView(main) {
+  const { data: exams, error } = await sb.rpc('admin_exams');
+  if (error) throw error;
+  const toolbar = h('div', { class: 'toolbar' }, title('Results', 'award'));
+  const help = h('p', { class: 'help' }, 'Subject teachers enter marks in the app (Results tab): they choose Monthly test, Mid-term or Annual exam, the class, the subject and the marks of each student. ',
+    'Here you see which subjects have come in for each class and download marksheets: one page per student with all subjects and the overall percentage.');
+  if (!exams.length) {
+    fill(main, toolbar, help, h('div', { class: 'card empty' }, icon('inbox', 40),
+      h('p', {}, 'No marks have been entered yet. Exams appear here as soon as a teacher saves marks for one.')));
+    return;
+  }
+  if (!ui.resExam || !exams.some(e => e.id === ui.resExam)) ui.resExam = exams[0].id;
+  const exam = exams.find(e => e.id === ui.resExam);
+  toolbar.append(h('select', { value: exam.id, 'aria-label': 'Exam', onchange: e => { ui.resExam = e.target.value; ui.resSection = null; show(main); } },
+    exams.map(e => h('option', { value: e.id }, `${e.name} (${e.marks_entered} marks)`))));
+
+  const { data: progress, error: pErr } = await sb.rpc('exam_progress', { p_exam: exam.id });
+  if (pErr) throw pErr;
+
+  if (ui.resSection && progress.some(p => p.section_id === ui.resSection)) {
+    await sectionResultsView(main, exam, progress.find(p => p.section_id === ui.resSection), toolbar);
+    return;
+  }
+
+  fill(main, toolbar, help,
+    h('div', { class: 'kpis' },
+      h('div', { class: 'kpi' }, h('b', {}, exam.marks_entered), h('span', {}, 'marks entered')),
+      h('div', { class: 'kpi' }, h('b', {}, exam.subjects), h('span', {}, 'subjects')),
+      h('div', { class: 'kpi' }, h('b', {}, `${exam.sections} / ${progress.length}`), h('span', {}, 'classes with marks'))),
+    h('h3', { class: 'sec' }, icon('layers'), `${exam.name}: marks received per class`),
+    h('div', { class: 'scroll' }, h('table', {},
+      h('thead', {}, h('tr', {}, ['Class', 'Students', 'Subjects entered (marks · entered by)', ''].map(x => h('th', {}, x)))),
+      h('tbody', {}, progress.map(p => h('tr', {},
+        h('td', {}, h('b', {}, `${p.class_name} ${p.section_name}`)),
+        h('td', {}, p.students),
+        h('td', { class: 'names' }, p.subjects.length
+          ? p.subjects.map(s => h('div', {}, h('span', { class: 'pill' + (s.entered < p.students ? ' off' : '') }, `${s.subject} ${s.entered}/${p.students}`), ' ', s.entered_by || ''))
+          : '—'),
+        h('td', { class: 'row-actions' },
+          h('button', { class: 'act', disabled: !p.subjects.length, onclick: () => { ui.resSection = p.section_id; show(main); } },
+            icon('fileText', 16), h('span', {}, 'Marksheets')))))))));
+}
+
+async function sectionResultsView(main, exam, sec, toolbar) {
+  const { data, error } = await sb.rpc('section_marksheets', { p_exam: exam.id, p_section: sec.section_id });
+  if (error) throw error;
+  const subjects = [...new Set(data.sheets.flatMap(s => s.subjects.map(x => x.subject)))].sort();
+  const allBtn = h('button', { class: 'primary', onclick: async () => {
+    allBtn.disabled = true;
+    try { await downloadMarksheets(data, `marksheets-${sec.class_name}-${sec.section_name}`); toast('Marksheets downloaded.'); }
+    catch (e) { toast(errText(e), 'err'); } finally { allBtn.disabled = false; }
+  } }, icon('download', 16), `Download all ${data.sheets.length} marksheets (PDF)`);
+
+  fill(main, toolbar,
+    h('p', {}, h('button', { class: 'link', onclick: () => { ui.resSection = null; show(main); } }, '‹ All classes')),
+    h('div', { class: 'toolbar' }, h('h3', { class: 'sec', style: 'margin:0 auto 0 0' }, icon('users'), `${sec.class_name} ${sec.section_name} · ${exam.name}`), allBtn),
+    h('p', { class: 'help' }, 'Each row is one student with every subject entered so far. Missing subjects show “—”. Download one marksheet, or all of them in one PDF (one page per student).'),
+    h('div', { class: 'scroll' }, h('table', {},
+      h('thead', {}, h('tr', {}, h('th', {}, 'Student'), subjects.map(s => h('th', {}, s)), h('th', {}, 'Total'), h('th', {}, '%'), h('th', {}))),
+      h('tbody', {}, data.sheets.map(sh => {
+        const by = Object.fromEntries(sh.subjects.map(x => [x.subject, x]));
+        const one = { ...data, sheets: [sh] };
+        return h('tr', {},
+          h('td', {}, h('b', {}, roll(sh.student)), h('div', { class: 'muted' }, sh.student.admission_no)),
+          subjects.map(s => h('td', {}, by[s] ? (by[s].absent ? h('span', { class: 'pill off' }, 'Absent') : `${num(by[s].obtained)}/${num(by[s].max_marks)}`) : '—')),
+          h('td', {}, sh.subjects.length ? `${num(sh.total_obtained)}/${num(sh.total_max)}` : '—'),
+          h('td', {}, h('b', {}, pct(sh.pct))),
+          h('td', { class: 'row-actions' }, h('button', { class: 'act', disabled: !sh.subjects.length, onclick: async () => {
+            try { await downloadMarksheets(one, `marksheet-${sh.student.full_name}`); toast('Marksheet downloaded.'); } catch (e) { toast(errText(e), 'err'); }
+          } }, icon('download', 16), h('span', {}, 'Marksheet'))));
+      })))));
+}
+
+// One A4 page per student: header, student details, subject table, total and percentage, signatures
+async function downloadMarksheets(data, fileName) {
+  const jsPDF = await loadPdfLibs();
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const teal = [0, 105, 92];
+  const dash = '-';
+  const sheets = data.sheets.filter(s => s.subjects.length);
+  if (!sheets.length) throw new Error('No marks entered for this selection yet.');
+  sheets.forEach((sh, i) => {
+    if (i) doc.addPage();
+    doc.setFillColor(...teal); doc.rect(0, 0, W, 8, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(...teal);
+    doc.text(data.school_name || 'School', W / 2, 52, { align: 'center' });
+    doc.setFontSize(13); doc.setTextColor(40);
+    doc.text(`Marksheet: ${data.name}`, W / 2, 74, { align: 'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(110);
+    doc.text(`Academic year ${data.year}`, W / 2, 90, { align: 'center' });
+
+    const st = sh.student;
+    doc.autoTable({
+      startY: 108, theme: 'plain', margin: { left: 50, right: 50 }, styles: { fontSize: 11, cellPadding: 3 },
+      body: [
+        [{ content: 'Student', styles: { fontStyle: 'bold' } }, st.full_name, { content: 'Admission no.', styles: { fontStyle: 'bold' } }, st.admission_no || dash],
+        [{ content: 'Class', styles: { fontStyle: 'bold' } }, `${st.class_name || dash} ${st.section_name || ''}`, { content: 'Roll no.', styles: { fontStyle: 'bold' } }, st.roll_no ?? dash],
+      ],
+    });
+    doc.autoTable({
+      startY: doc.lastAutoTable.finalY + 14, theme: 'grid', margin: { left: 50, right: 50 },
+      headStyles: { fillColor: teal, textColor: 255, fontStyle: 'bold' },
+      styles: { fontSize: 10.5, cellPadding: 6 },
+      columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' } },
+      head: [['Subject', 'Total marks', 'Obtained', 'Percentage', 'Remarks']],
+      body: sh.subjects.map(x => [x.subject, num(x.max_marks), x.absent ? 'Absent' : num(x.obtained), `${x.pct}%`, x.remarks || '']),
+      foot: [['Total', num(sh.total_max), num(sh.total_obtained), sh.pct == null ? dash : `${sh.pct}%`, '']],
+      footStyles: { fillColor: [224, 242, 241], textColor: 30, fontStyle: 'bold', halign: 'center' },
+    });
+    const y = doc.lastAutoTable.finalY + 30;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.setTextColor(...teal);
+    doc.text(`Overall percentage: ${sh.pct == null ? dash : sh.pct + '%'}`, 50, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(60);
+    doc.line(50, H - 110, 210, H - 110); doc.text('Class teacher', 50, H - 96);
+    doc.line(W - 210, H - 110, W - 50, H - 110); doc.text('Principal', W - 210, H - 96);
+    doc.setFontSize(8); doc.setTextColor(140);
+    doc.text(`Generated ${new Date().toLocaleDateString('en-GB')}  |  page ${i + 1} of ${sheets.length}`, W / 2, H - 30, { align: 'center' });
+  });
+  doc.save(`${fileName.replace(/[^\w\- ]+/g, '').trim() || 'marksheet'}.pdf`);
 }
 
 // ---------------------------------------------------------------------------
