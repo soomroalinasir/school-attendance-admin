@@ -36,7 +36,9 @@ function createLoginCard() {
     try {
       await callUsers({ action: 'create', role: role.value, teacher_id: role.value === 'teacher' ? teacher.value || null : null,
         email: email.value.trim(), phone: phone.value.trim(), password: pw.value });
-      toast('Login created. Share the email/phone and password with the teacher.');
+      toast(role.value === 'admin'
+        ? 'Admin login created. Share the email and password with them privately.'
+        : 'Login created. Share the email/phone and password with the teacher.');
       router.render();
     } catch (e) {
       msg.className = 'err';
