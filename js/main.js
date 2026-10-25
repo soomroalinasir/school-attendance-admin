@@ -160,6 +160,8 @@ async function signOut() {
 
 function go(view) {
   if (!isView(view)) return;
+  // a form left open (e.g. the browser's Back button while editing) belongs to the page being left
+  for (const d of document.querySelectorAll('dialog[open]')) d.close();
   ui.view = view;
   if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
   shell();
