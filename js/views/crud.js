@@ -17,6 +17,11 @@ const SEARCH_DELAY_MS = 300; // big tables: wait for typing to pause before aski
 const typeOf = (col) => col[2] || 'text';
 const editable = (def) => def.cols.filter((c) => !(c[3] && c[3].ro));
 const isRequired = (c) => !!(c[3] && c[3].req);
+/** 'select:a,b' or 'select:a=Label A,b=Label B' → [{ id, label }] */
+const selectChoices = (type) => type.slice(7).split(',').map((o) => {
+  const [id, label = id] = o.split('=');
+  return { id, label };
+});
 
 /** A cell's text: foreign keys show the referenced row's name. */
 function fmt(col, row) {
@@ -26,6 +31,7 @@ function fmt(col, row) {
   if (v == null || v === '') return '';
   if (type === 'bool') return v ? '✓' : '—';
   if (type.startsWith('fk:')) return lab(type.slice(3), v);
+  if (type.startsWith('select:')) return (selectChoices(type).find((o) => o.id === v) || { label: String(v) }).label;
   if (type === 'time') return String(v).slice(0, 5);
   return String(v);
 }
@@ -279,7 +285,7 @@ function controlFor(col, value, row) {
   const [key, , type = 'text'] = col;
   if (type === 'bool') return checkboxControl(key, value);
   if (type === 'fk:students') return studentPickerControl(key, value, row && row.students);
-  if (type.startsWith('select:')) return selectControl(key, value, type.slice(7).split(',').map((o) => ({ id: o, label: o })));
+  if (type.startsWith('select:')) return selectControl(key, value, selectChoices(type));
   if (type.startsWith('fk:')) {
     const t = type.slice(3);
     const ay = activeYear();

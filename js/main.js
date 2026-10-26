@@ -125,16 +125,29 @@ function loginView(message) {
 
 // ---- the menu and pages -------------------------------------------------------------------
 
+/** Leave requests waiting for the admin, as a number on the menu. A failure only leaves the number out. */
+async function leaveRequestCount(slot) {
+  try {
+    const { data, error } = await db().rpc('admin_leave_requests');
+    if (error) throw error;
+    if (data && data.length) fill(slot, h('span', { class: 'count', title: 'Leave requests waiting for you' }, String(data.length)));
+  } catch (e) {
+    console.warn('[admin] leave requests:', errText(e));
+  }
+}
+
 function shell() {
   main = h('main');
+  const waiting = h('span', { class: 'count-slot' });
   const nav = h('nav', {}, h('div', { class: 'nav-brand' }, h('span', { class: 'mark-badge' }, mark(30)),
     h('div', {}, h('div', { class: 'nav-school' }, SCHOOL_NAME), h('div', { class: 'nav-tagline' }, TAGLINE))),
     NAV.map(([group, items]) => [h('div', { class: 'group' }, group),
       items.map(([id, label, ic]) => h('button', { class: ui.view === id ? 'active' : '', 'aria-current': ui.view === id ? 'page' : null,
-        onclick: () => router.go(id) }, icon(ic), label))]),
+        onclick: () => router.go(id) }, icon(ic), label, id === 'fixtures' && waiting))]),
     h('div', { class: 'group' }, 'Account'),
     h('button', { onclick: signOut }, icon('logout'), 'Sign out'));
   fill(app, h('div', { class: 'layout' }, nav, main));
+  leaveRequestCount(waiting);
   return show();
 }
 

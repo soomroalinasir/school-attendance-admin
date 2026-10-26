@@ -1,9 +1,10 @@
-// Leave & fixtures: mark a teacher on leave for a day (or some periods); their periods are given at once
-// to substitutes by the database (admin_record_leave, rules in the teacher-leave migration). The admin can
-// change any fixture or make it Physical Activity.
+// Leave & fixtures: mark a teacher on leave for a day (or some periods), or approve a teacher's request
+// from the app; their periods are given at once to substitutes by the database (admin_record_leave,
+// rules in the teacher-leave and school-sections migrations). The admin can change any fixture or make it
+// Physical Activity.
 import { fill, h, icon, title } from '../dom.js';
 import { hhmm, prettyDate, todayYmd, ymdOf } from '../format.js';
-import { confirmBox, toast } from '../ui.js';
+import { confirmBox, promptBox, toast } from '../ui.js';
 import { db, errText, router, ui } from '../data.js';
 import { describeDbError, fieldProblem } from '../validation.js';
 
@@ -18,6 +19,12 @@ async function rpc(name, args) {
 
 const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
 const periodList = (ps) => ps.map((p) => `P${p}`).join(', ');
+const NOTE_MAX = 200; // leave_requests.review_note
+
+/** The toast after a leave is recorded (by the admin or by approving a request). */
+const leaveToast = (name, r) => (r.fixtures
+  ? `${name} is on leave: ${plural(r.fixtures, 'fixture')} made` + (r.physical_activity ? `, ${r.physical_activity} as Physical Activity.` : '.')
+  : `${name} is on leave. No classes needed covering.`);
 
 /** Is this teacher free to take period `periodNo`? (Not teaching then and not on leave then.) */
 function freeAt(teacher, periodNo, leaves) {
@@ -77,10 +84,7 @@ function leaveForm(day, editing) {
     save.disabled = true;
     try {
       const r = await rpc('admin_record_leave', { p_teacher: teacher.value, p_date: day.date, p_slots: slots, p_reason: reason.value.trim() || null });
-      const name = teachers.find((t) => t.id === teacher.value).name;
-      toast(r.fixtures
-        ? `${name} is on leave: ${plural(r.fixtures, 'fixture')} made` + (r.physical_activity ? `, ${r.physical_activity} as Physical Activity.` : '.')
-        : `${name} is on leave. No classes needed covering.`);
+      toast(leaveToast(teachers.find((t) => t.id === teacher.value).name, r));
       ui.fixtureEdit = null;
       router.render();
     } catch (e) {
@@ -104,17 +108,22 @@ function leaveForm(day, editing) {
     h('p', {}, save, editing && h('button', { class: 'link', onclick: () => { ui.fixtureEdit = null; router.render(); } }, 'Cancel')));
 }
 
-/** Who can take a fixture: free teachers first (fewest classes), then the busy ones (disabled). */
+/**
+ * Who can take a fixture: free teachers of the class's section group first (fewest classes), then free
+ * teachers of the other sections (allowed, but marked), then the busy ones (disabled).
+ */
 function substituteSelect(f, day) {
   const options = day.teachers
     .filter((t) => t.id !== f.absent_teacher_id)
     .map((t) => {
       const current = t.id === f.substitute_teacher_id;
       const free = current || freeAt(t, f.period_no, day.leaves);
+      const same = !f.group || (t.groups || []).includes(f.group);
       const load = t.busy.length - (current ? 1 : 0);
-      return { t, free, load, label: `${t.name} — ${plural(load, 'class', 'classes')}` + (free ? '' : ' (busy)') };
+      const label = `${t.name} — ${plural(load, 'class', 'classes')}` + (!free ? ' (busy)' : same ? '' : ' (other section)');
+      return { t, free, same, load, label };
     })
-    .sort((a, b) => (b.free - a.free) || (a.load - b.load) || a.t.name.localeCompare(b.t.name));
+    .sort((a, b) => (b.free - a.free) || (b.same - a.same) || (a.load - b.load) || a.t.name.localeCompare(b.t.name));
   const sel = h('select', { value: f.substitute_teacher_id || '', 'aria-label': `Substitute for P${f.period_no} ${f.class_name} ${f.section_name}` },
     h('option', { value: '' }, PHYSICAL_ACTIVITY),
     options.map((o) => h('option', { value: o.t.id, disabled: !o.free }, o.label)));
@@ -131,9 +140,62 @@ function substituteSelect(f, day) {
   return sel;
 }
 
+/** Teachers' leave requests from the app, waiting for an answer (every date). */
+function requestsCard(requests) {
+  if (requests.failed) {
+    return [h('h3', { class: 'sec' }, icon('inbox'), 'Leave requests from teachers'),
+      h('p', { class: 'err' }, 'The leave requests could not be loaded: ' + requests.failed)];
+  }
+  const answer = async (r, approve) => {
+    let note = null;
+    if (!approve) {
+      note = await promptBox({ title: `Reject ${r.teacher_name}’s leave?`, label: 'Note for the teacher (optional)', ok: 'Reject' });
+      if (note === null) return;
+      note = note.trim() || null;
+      if (note && note.length > NOTE_MAX) return toast(`The note can be at most ${NOTE_MAX} characters.`, 'err');
+    }
+    try {
+      const res = await rpc('admin_review_leave_request', { p_request: r.id, p_approve: approve, p_note: note });
+      if (approve) {
+        toast(leaveToast(r.teacher_name, res));
+        ui.fixtureDate = r.leave_date; // show the day with its new fixtures
+      } else {
+        toast(`${r.teacher_name}’s request was rejected.`);
+      }
+      ui.fixtureEdit = null;
+      router.go('fixtures'); // also updates the number on the menu
+    } catch (e) {
+      toast(describeDbError(e, 'leave_requests'), 'err');
+      router.render();
+    }
+  };
+  return [
+    h('h3', { class: 'sec' }, icon('inbox'), `Leave requests from teachers (${requests.length})`),
+    requests.length
+      ? h('div', { class: 'scroll' }, h('table', {},
+        h('thead', {}, h('tr', {}, ['Date', 'Teacher', 'Leave', 'Reason', ''].map((x) => h('th', {}, x)))),
+        h('tbody', {}, requests.map((r) => h('tr', {},
+          h('td', {}, h('b', {}, prettyDate(r.leave_date))),
+          h('td', {}, r.teacher_name, r.already_on_leave && h('div', {}, h('span', { class: 'pill' }, 'already marked on leave'))),
+          h('td', {}, r.whole_day ? 'Whole day' : periodList(r.periods)),
+          h('td', { class: 'muted' }, r.reason),
+          h('td', { class: 'row-actions' },
+            h('button', { class: 'act', onclick: () => answer(r, true) }, icon('check', 16), h('span', {}, 'Approve')),
+            h('button', { class: 'act danger', onclick: () => answer(r, false) }, icon('x', 16), h('span', {}, 'Reject'))))))))
+      : h('p', { class: 'muted' }, 'No requests waiting. Teachers ask for leave in the app (More → My leave).'),
+  ];
+}
+
 export async function fixturesView(main) {
   ui.fixtureDate = ui.fixtureDate || todayYmd();
-  const day = await rpc('admin_fixtures', { p_date: ui.fixtureDate });
+  const [day, requests] = await Promise.all([
+    rpc('admin_fixtures', { p_date: ui.fixtureDate }),
+    // the requests failing must not hide the day's leave and fixtures
+    rpc('admin_leave_requests', {}).catch((e) => {
+      console.error('[admin] leave requests:', e);
+      return { failed: errText(e) };
+    }),
+  ]);
   const show = (v) => {
     if (!v) return;
     ui.fixtureDate = v;
@@ -166,8 +228,12 @@ export async function fixturesView(main) {
       h('button', { 'aria-label': 'Previous day', onclick: () => step(-1) }, icon('chevronLeft', 16)), dateInput,
       h('button', { 'aria-label': 'Next day', onclick: () => step(1) }, icon('chevronRight', 16))),
     h('p', { class: 'help' }, prettyDate(day.date) + '. ',
-      'Each period of a teacher on leave goes to a teacher who is free then, with the fewest classes that day. Two classes in a row are fine, three never. When equal: no class next to it first, then the fewest fixtures this month. ',
+      'Each period of a teacher on leave goes to a teacher of the same sections who is free then, with the fewest classes that day: Early Childhood and Primary teachers cover each other, and Middle and Secondary teachers cover each other. Two classes in a row are fine, three never. When equal: no class next to it first, then the fewest fixtures this month. ',
       `If nobody is free the class has ${PHYSICAL_ACTIVITY}. You can change any fixture below.`),
+    day.classes_without_section > 0 && h('div', { class: 'banner' }, icon('alert'),
+      h('span', {}, `${plural(day.classes_without_section, 'class has', 'classes have')} no school section yet, so any teacher can cover them.`),
+      h('button', { class: 'link', onclick: () => router.go('classes') }, 'Set it under Classes →')),
+    requestsCard(requests),
     leaveForm(day, editing),
 
     h('h3', { class: 'sec' }, icon('userX'), `On leave (${day.leaves.length})`),
@@ -184,7 +250,7 @@ export async function fixturesView(main) {
       : h('p', { class: 'muted' }, 'Nobody is on leave on this day.'),
 
     h('h3', { class: 'sec' }, icon('swap'), `Fixtures (${day.fixtures.length})`),
-    pe > 0 && h('div', { class: 'banner' }, icon('sun'), `${plural(pe, 'class', 'classes')} with ${PHYSICAL_ACTIVITY}: every free teacher would have had three classes in a row. Choose a substitute below if you wish.`),
+    pe > 0 && h('div', { class: 'banner' }, icon('sun'), `${plural(pe, 'class', 'classes')} with ${PHYSICAL_ACTIVITY}: no teacher of those sections was free without three classes in a row. Choose a substitute below if you wish.`),
     day.fixtures.length
       ? h('div', { class: 'scroll' }, h('table', {},
         h('thead', {}, h('tr', {}, ['Period', 'Class', 'Subject', 'On leave', 'Substitute', ''].map((x) => h('th', {}, x)))),

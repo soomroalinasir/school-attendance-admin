@@ -25,6 +25,8 @@ nav button { display:flex; width:100%; text-align:left; background:none; border:
 nav button .ic { opacity:.85; }
 nav button.active, nav button:hover { background:rgba(255,255,255,.12); }
 nav button.active { box-shadow:inset 3px 0 0 var(--gold); }
+nav .count-slot { margin-left:auto; }
+nav .count { display:inline-block; min-width:20px; padding:0 6px; border-radius:10px; background:var(--gold); color:var(--primary-dark); font-size:12px; font-weight:700; text-align:center; }
 nav .group { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--gold-soft); opacity:.85; margin:14px 10px 4px; }
 main { flex:1; padding:24px; min-width:0; }
 .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }

@@ -1,6 +1,7 @@
 // What each setup page shows and edits, the menu, and the setup checklist.
 //
 // Columns are [key, label, type, opts]. type: text | number | date | time | bool | select:a,b | fk:<table>
+// (a select may name its choices: select:a=Label A,b=Label B)
 // opts: req, ro (list only), ph (placeholder), hint, and the rules in validation.js (max, pattern …).
 // Length limits are the database's (supabase/migrations/*_input_validation.sql); a test keeps them equal.
 import { h, icon } from './dom.js';
@@ -9,6 +10,10 @@ import { activeYear, byId, cache, counts, lab, router } from './data.js';
 
 export const PHONE = /^\+?[0-9][0-9 -]{6,18}[0-9]$/;
 export const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+/** The school's four sections (classes.school_section), in order. */
+export const SCHOOL_SECTIONS = [
+  ['early_childhood', 'Early Childhood'], ['primary', 'Primary'], ['middle', 'Middle'], ['secondary', 'Secondary & Higher Secondary'],
+];
 
 /** Who teaches in one period (time slot), from the active year's weekly timetable. */
 function slotTeachers(slot) {
@@ -48,10 +53,11 @@ export const DEFS = {
   classes: { title: 'Classes', one: 'class', icon: 'layers',
     cols: [
       ['name', 'Name', 'text', { req: true, max: 60, ph: 'e.g. Grade 6 or Matric', hint: 'The class name teachers and parents know.' }],
+      ['school_section', 'School section', `select:${SCHOOL_SECTIONS.map(([v, l]) => `${v}=${l}`).join(',')}`, { req: true, hint: 'Fixtures stay within Early Childhood + Primary, or within Middle + Secondary & Higher Secondary.' }],
       ['level', 'Level', 'number', { int: true, ph: 'e.g. 6', hint: 'Optional number for the grade (Nursery = -1, KG = 0).' }],
       ['sort_order', 'Order', 'number', { int: true, ph: 'e.g. 7', hint: 'Lists are sorted by this number, and at year end students move to the class with the next number.' }],
       ['created_by_teacher_id', 'Made by teacher', 'fk:teachers', { ro: true }]],
-    help: 'Order decides promotion: students move to the class with the next order number. Classes made by teachers on their phone are marked and never used for promotion.' },
+    help: 'Order decides promotion: students move to the class with the next order number. The school section decides who covers a fixture: a teacher of Early Childhood or Primary covers those two sections, a teacher of Middle or Secondary covers those two. Classes made by teachers on their phone are marked and never used for promotion.' },
   sections: { title: 'Sections', one: 'section', icon: 'grid',
     cols: [
       ['class_id', 'Class', 'fk:classes', { req: true, hint: 'Which class this section belongs to.' }],
