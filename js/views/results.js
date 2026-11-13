@@ -4,7 +4,7 @@ import { fill, h, icon, title } from '../dom.js';
 import { num, pct, roll } from '../format.js';
 import { kpi, toast } from '../ui.js';
 import { db, errText, router, ui } from '../data.js';
-import { downloadMarksheets } from '../pdf.js';
+import { downloadMarksheets, joinMarksheets } from '../pdf.js';
 
 async function rpc(name, args) {
   const { data, error } = await db().rpc(name, args);
@@ -50,7 +50,7 @@ export async function resultsView(main) {
     return;
   }
 
-  fill(main, toolbar, help,
+  fill(main, toolbar, help, classDownload(exam, progress),
     h('div', { class: 'kpis' },
       kpi('marks entered', exam.marks_entered),
       kpi('subjects', exam.subjects),
@@ -67,6 +67,34 @@ export async function resultsView(main) {
         h('td', { class: 'row-actions' },
           h('button', { class: 'act', disabled: !p.subjects.length, onclick: () => { ui.resSection = p.section_id; router.render(); } },
             icon('fileText', 16), h('span', {}, 'Marksheets')))))))));
+}
+
+/** A class and a button: every marksheet of the class (all its sections with marks) in one PDF. */
+function classDownload(exam, progress) {
+  const classes = new Map(); // class name → its sections with marks, in the server's order
+  for (const p of progress) {
+    if (!p.subjects.length) continue;
+    if (!classes.has(p.class_name)) classes.set(p.class_name, []);
+    classes.get(p.class_name).push(p);
+  }
+  if (!classes.size) return null;
+  if (!classes.has(ui.resClass)) ui.resClass = classes.keys().next().value;
+  const label = (name) => {
+    const n = classes.get(name).length;
+    return n > 1 ? `${name} (${n} sections)` : `${name} ${classes.get(name)[0].section_name}`;
+  };
+  const pick = h('select', { value: ui.resClass, 'aria-label': 'Class', onchange: (e) => { ui.resClass = e.target.value; } },
+    [...classes.keys()].map((name) => h('option', { value: name }, label(name))));
+  const btn = h('button', { class: 'primary', onclick: () => download(btn, async () => {
+    const name = ui.resClass;
+    const parts = [];
+    for (const sec of classes.get(name)) parts.push(await rpc('section_marksheets', { p_exam: exam.id, p_section: sec.section_id }));
+    await downloadMarksheets(joinMarksheets(parts), `marksheets-${name}-${exam.name}`);
+  }, 'Marksheets downloaded.') }, icon('download', 16), 'Download class marksheets (PDF)');
+  return h('div', { class: 'card' },
+    h('h3', { class: 'sec', style: 'margin-top:0' }, icon('fileText'), 'Marksheets of a whole class'),
+    h('p', { class: 'help' }, 'One PDF with every student of the class who has marks, all sections together, one page per student.'),
+    h('div', { class: 'toolbar' }, pick, btn));
 }
 
 async function sectionResultsView(main, exam, sec, toolbar) {

@@ -143,15 +143,71 @@ export async function downloadDailyReport(d) {
 
 // ---- marksheets -------------------------------------------------------------------------
 
-/** One A4 page per student with marks: the school's logo (or its name when logo is null), student details,
- * subject table, percentage, signatures. logo: the full logo as a PNG data URL. */
+/** Joins the marksheets of several sections (one section_marksheets answer each) into one, in the given order. */
+export function joinMarksheets(parts) {
+  if (!parts.length) throw new Error('No marks entered for this selection yet.');
+  return { ...parts[0], sheets: parts.flatMap((p) => p.sheets) };
+}
+
+// Text sizes for the subject table, largest first. A marksheet uses the largest that keeps it on one page;
+// with very many subjects or long remarks the remarks are shortened as well.
+const SHEET_SIZES = [
+  { font: 10.5, pad: 6 }, { font: 9.5, pad: 4.5 }, { font: 8.5, pad: 3 }, { font: 8.5, pad: 3, remarks: 60 },
+  { font: 7.5, pad: 2 }, { font: 7.5, pad: 2, remarks: 60 }, { font: 6.5, pad: 1.5, remarks: 60 },
+  { font: 6.5, pad: 1.5, remarks: 30 }, { font: 6, pad: 1, remarks: 0 },
+];
+const SHEET_TOP = 140; // where the student details start, below the logo and title
+const SHEET_BOTTOM = 140; // room kept at the foot of the page for the overall percentage and signatures
+
+const shorten = (text, max) => (max == null || text.length <= max ? text : max ? `${text.slice(0, max - 3).trimEnd()}...` : '');
+
+/** Draws the student details and the subject table from SHEET_TOP at the given size. */
+function sheetTables(doc, sh, size) {
+  const bold = (content) => ({ content, styles: { fontStyle: 'bold' } });
+  const st = sh.student;
+  doc.autoTable({
+    startY: SHEET_TOP, theme: 'plain', margin: { left: 50, right: 50 }, styles: { fontSize: 11, cellPadding: 3 },
+    body: [
+      [bold('Student'), st.full_name, bold('Admission no.'), st.admission_no || DASH],
+      [bold('Class'), `${st.class_name || DASH} ${st.section_name || ''}`, bold('Roll no.'), st.roll_no ?? DASH],
+    ],
+  });
+  doc.autoTable({
+    startY: doc.lastAutoTable.finalY + 14, theme: 'grid', margin: { left: 50, right: 50 },
+    headStyles: { fillColor: BLUE, textColor: 255, fontStyle: 'bold' },
+    styles: { fontSize: size.font, cellPadding: size.pad },
+    // numbers never wrap and the subject keeps its room; the remarks take what is left
+    columnStyles: { 0: { minCellWidth: 120 }, 1: { halign: 'center', cellWidth: 'wrap' }, 2: { halign: 'center', cellWidth: 'wrap' },
+      3: { halign: 'center', cellWidth: 'wrap' } },
+    head: [['Subject', 'Total marks', 'Obtained', 'Percentage', 'Remarks']],
+    body: sh.subjects.map((x) => [x.subject, num(x.max_marks), x.absent ? 'Absent' : num(x.obtained), pctText(x.pct), shorten(x.remarks || '', size.remarks)]),
+    foot: [['Total', num(sh.total_max), num(sh.total_obtained), pctText(sh.pct), '']],
+    footStyles: { fillColor: [236, 235, 253], textColor: 30, fontStyle: 'bold', halign: 'center' },
+  });
+}
+
+/** The largest size at which the student's tables end above the foot of the first page (tried on a scratch document). */
+function sheetSize(JsPdf, sh) {
+  for (const size of SHEET_SIZES) {
+    const scratch = new JsPdf({ unit: 'pt', format: 'a4' });
+    sheetTables(scratch, sh, size);
+    const fits = scratch.internal.getNumberOfPages() === 1
+      && scratch.lastAutoTable.finalY <= scratch.internal.pageSize.getHeight() - SHEET_BOTTOM;
+    if (fits) return size;
+  }
+  throw new Error(`The marksheet of ${sh.student.full_name} has too many subjects to fit on one page.`);
+}
+
+/** One A4 page per student with marks, never more: the school's logo (or its name when logo is null), student
+ * details, subject table, percentage, signatures. Many subjects are printed smaller to stay on the page.
+ * logo: the full logo as a PNG data URL. */
 export function buildMarksheets(JsPdf, data, logo = null) {
   const sheets = data.sheets.filter((s) => s.subjects.length);
   if (!sheets.length) throw new Error('No marks entered for this selection yet.');
+  const sizes = sheets.map((sh) => sheetSize(JsPdf, sh));
   const doc = new JsPdf({ unit: 'pt', format: 'a4' });
   const W = doc.internal.pageSize.getWidth();
   const H = doc.internal.pageSize.getHeight();
-  const bold = (content) => ({ content, styles: { fontStyle: 'bold' } });
 
   sheets.forEach((sh, i) => {
     if (i) doc.addPage();
@@ -176,24 +232,7 @@ export function buildMarksheets(JsPdf, data, logo = null) {
     doc.setTextColor(110);
     doc.text(`Academic year ${data.year}`, W / 2, 126, { align: 'center' });
 
-    const st = sh.student;
-    doc.autoTable({
-      startY: 140, theme: 'plain', margin: { left: 50, right: 50 }, styles: { fontSize: 11, cellPadding: 3 },
-      body: [
-        [bold('Student'), st.full_name, bold('Admission no.'), st.admission_no || DASH],
-        [bold('Class'), `${st.class_name || DASH} ${st.section_name || ''}`, bold('Roll no.'), st.roll_no ?? DASH],
-      ],
-    });
-    doc.autoTable({
-      startY: doc.lastAutoTable.finalY + 14, theme: 'grid', margin: { left: 50, right: 50 },
-      headStyles: { fillColor: BLUE, textColor: 255, fontStyle: 'bold' },
-      styles: { fontSize: 10.5, cellPadding: 6 },
-      columnStyles: { 1: { halign: 'center' }, 2: { halign: 'center' }, 3: { halign: 'center' } },
-      head: [['Subject', 'Total marks', 'Obtained', 'Percentage', 'Remarks']],
-      body: sh.subjects.map((x) => [x.subject, num(x.max_marks), x.absent ? 'Absent' : num(x.obtained), pctText(x.pct), x.remarks || '']),
-      foot: [['Total', num(sh.total_max), num(sh.total_obtained), pctText(sh.pct), '']],
-      footStyles: { fillColor: [236, 235, 253], textColor: 30, fontStyle: 'bold', halign: 'center' },
-    });
+    sheetTables(doc, sh, sizes[i]);
     const y = doc.lastAutoTable.finalY + 30;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(14);
