@@ -5,6 +5,7 @@ import { cache, errText, refreshCount, reload, router, setClient, ui, db } from 
 import { DEFS, NAV, SPECIAL_VIEWS } from './defs.js';
 import { crudView } from './views/crud.js';
 import { fixturesView } from './views/fixtures.js';
+import { forgotPasswordView } from './views/forgot.js';
 import { importView } from './views/import.js';
 import { loginsView } from './views/logins.js';
 import { promotionView } from './views/promotion.js';
@@ -89,10 +90,14 @@ function configView() {
 
 // ---- sign-in --------------------------------------------------------------------------------
 
-function loginView(message) {
-  const email = h('input', { type: 'email', autocomplete: 'username', maxlength: 254, 'aria-label': 'Email' });
+/** message: a problem to show; notice: good news (after a password reset); email: to fill in. */
+function loginView(message, { notice = '', email: typed = '' } = {}) {
+  const email = h('input', { type: 'email', autocomplete: 'username', maxlength: 254, 'aria-label': 'Email', value: typed });
   const pw = h('input', { type: 'password', autocomplete: 'current-password', maxlength: 72, 'aria-label': 'Password' });
   const msg = h('p', { class: 'err', role: 'alert' }, message || '');
+  const forgot = () => forgotPasswordView(app, { email: email.value,
+    onDone: (addr) => loginView('', { email: addr, notice: 'Password changed. Sign in with your new password.' }),
+    onCancel: () => loginView() });
   const btn = h('button', { class: 'primary', onclick: () => go() }, 'Sign in');
   async function go() {
     msg.textContent = '';
@@ -118,7 +123,9 @@ function loginView(message) {
   fill(app, h('div', { class: 'center' }, h('div', { class: 'card auth-card' }, brandBlock('Admin portal'),
     h('h2', {}, icon('key', 22), 'Admin sign in'),
     h('label', { class: 'f' }, 'Email'), email,
-    h('label', { class: 'f' }, 'Password'), pw, msg,
+    h('label', { class: 'f' }, 'Password'), pw,
+    h('p', { class: 'forgot' }, h('button', { class: 'link', onclick: forgot }, 'Forgot password?')),
+    notice && h('p', { class: 'ok', role: 'status' }, notice), msg,
     h('p', {}, btn, ' ',
       h('button', { class: 'link', onclick: () => { forgetConfig(); configView(); } }, 'Change server')))));
 }

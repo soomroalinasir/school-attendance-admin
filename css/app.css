@@ -56,6 +56,7 @@ body:has(.auth-card) { background:radial-gradient(circle at 50% 0%, var(--primar
 .auth-card { border-top:4px solid var(--gold); box-shadow:0 12px 40px rgba(27,20,100,.12); }
 .auth-card h2 { display:flex; gap:8px; align-items:center; font-size:18px; margin:18px 0 4px; }
 .auth-card h2 .ic { color:var(--primary); }
+.auth-card .forgot { text-align:right; margin:6px 0 0; }
 .brand { text-align:center; padding-bottom:16px; border-bottom:1px solid var(--line); }
 .brand .logo { display:block; margin:4px auto 0; max-width:100%; height:auto; width:190px; }
 .brand-caption { display:inline-flex; align-items:center; gap:10px; margin-top:10px; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
