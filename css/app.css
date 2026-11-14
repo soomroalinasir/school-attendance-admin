@@ -57,6 +57,35 @@ body:has(.auth-card) { background:radial-gradient(circle at 50% 0%, var(--primar
 .auth-card h2 { display:flex; gap:8px; align-items:center; font-size:18px; margin:18px 0 4px; }
 .auth-card h2 .ic { color:var(--primary); }
 .auth-card .forgot { text-align:right; margin:6px 0 0; }
+/* sign-in pages, embossed like the app's: raised card and logo plate, sunken fields that light up, a raised
+   button that presses in, and a short staggered opening (skipped when the system asks for less motion) */
+body:has(.auth-card) { background:radial-gradient(circle at 15% 0%, #dcdcf5, #e7eaf6 55%); }
+.auth-card { --emb:#e7eaf6; --emb-light:#fff; --emb-dark:#b9beda; background:var(--emb); border:none; border-radius:28px;
+  box-shadow:14px 14px 30px var(--emb-dark), -14px -14px 30px var(--emb-light); animation:emb-rise .6s cubic-bezier(.2,.8,.2,1) both; }
+.auth-card .brand { border-bottom:none; margin-bottom:8px; padding:18px 12px 16px; border-radius:22px; background:var(--emb);
+  box-shadow:7px 7px 16px var(--emb-dark), -7px -7px 16px var(--emb-light); }
+.auth-card label.f { margin-top:14px; }
+.auth-card input:not([type=checkbox]) { width:100%; border:none; border-radius:14px; padding:12px 14px; background:var(--emb);
+  box-shadow:inset 5px 5px 10px var(--emb-dark), inset -5px -5px 10px var(--emb-light); transition:box-shadow .2s; }
+.auth-card input:not([type=checkbox]):focus { outline:none;
+  box-shadow:inset 5px 5px 10px var(--emb-dark), inset -5px -5px 10px var(--emb-light), 0 0 0 2px var(--primary); }
+.auth-card input:disabled { opacity:.7; }
+.auth-card button.primary { border:none; border-radius:14px; padding:11px 26px; font-weight:600; background:linear-gradient(135deg, #5b50dd, var(--primary));
+  box-shadow:6px 6px 14px var(--emb-dark), -6px -6px 14px var(--emb-light); transition:box-shadow .15s, transform .15s; }
+.auth-card button.primary:hover { filter:brightness(1.06); }
+.auth-card button.primary:active:not(:disabled) { transform:scale(.98); box-shadow:inset 4px 4px 9px rgba(20,14,90,.6), inset -3px -3px 8px rgba(150,140,255,.45); }
+.auth-card button.primary:focus-visible { outline:2px solid var(--gold); outline-offset:3px; }
+.auth-card > * { animation:emb-in .5s cubic-bezier(.2,.8,.2,1) both; }
+.auth-card > :nth-child(2) { animation-delay:.06s; } .auth-card > :nth-child(3) { animation-delay:.12s; }
+.auth-card > :nth-child(4) { animation-delay:.18s; } .auth-card > :nth-child(5) { animation-delay:.22s; }
+.auth-card > :nth-child(6) { animation-delay:.26s; } .auth-card > :nth-child(7) { animation-delay:.30s; }
+.auth-card > :nth-child(n+8) { animation-delay:.34s; }
+@keyframes emb-rise { from { opacity:0; transform:translateY(18px) scale(.98); } }
+@keyframes emb-in { from { opacity:0; transform:translateY(10px); } }
+@media (prefers-reduced-motion: reduce) {
+  .auth-card, .auth-card > * { animation:none; }
+  .auth-card input:not([type=checkbox]), .auth-card button.primary { transition:none; }
+}
 .brand { text-align:center; padding-bottom:16px; border-bottom:1px solid var(--line); }
 .brand .logo { display:block; margin:4px auto 0; max-width:100%; height:auto; width:190px; }
 .brand-caption { display:inline-flex; align-items:center; gap:10px; margin-top:10px; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
