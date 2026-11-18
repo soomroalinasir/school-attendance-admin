@@ -95,6 +95,12 @@ export async function crudView(main, table) {
   const countLine = h('p', { class: 'muted', style: 'margin:0 0 8px' });
   const selCount = h('b');
   const selbar = h('div', { class: 'selbar', hidden: true }, selCount,
+    table === 'enrollments' && h('button', { class: 'primary', onclick: async () => {
+      if (await moveEnrollments([...selected.values()])) {
+        selected.clear();
+        await refresh();
+      }
+    } }, icon('swap', 16), 'Move to section…'),
     h('button', { class: 'danger solid', onclick: () => removeRows(table, [...selected.values()]) }, icon('trash', 16), 'Delete selected'),
     h('button', { class: 'link', onclick: () => { selected.clear(); render(); } }, 'Clear selection'));
   const pickAll = h('input', { type: 'checkbox', title: 'Select all shown', 'aria-label': 'Select all shown' });
@@ -399,6 +405,50 @@ export function editDialog(table, row) {
       router.render();
     }
   });
+}
+
+// ---- moving students to another section ---------------------------------------------------
+
+/**
+ * Asks for a section of the same academic year and moves the chosen enrollments there (one server call:
+ * new roll numbers at the end of the section). Resolves true when something moved.
+ */
+export async function moveEnrollments(rows) {
+  if (!rows.length) return false;
+  const years = new Set(rows.map((r) => r.academic_year_id));
+  if (years.size > 1) {
+    toast('Choose students of one academic year at a time.', 'err');
+    return false;
+  }
+  const [year] = years;
+  const choices = options('sections', (s) => s.academic_year_id === year);
+  const n = rows.length;
+  const who = n === 1 ? (rows[0].students ? studentLabel(rows[0].students) : '1 student') : `${n} students`;
+  const target = await modal((close) => {
+    const pick = h('select', { 'aria-label': 'New section', style: 'width:100%' },
+      h('option', { value: '' }, 'Choose the new section…'),
+      choices.map((c) => h('option', { value: c.id }, c.label)));
+    const msg = h('p', { class: 'err', role: 'alert' });
+    const go = () => {
+      if (!pick.value) msg.textContent = 'Choose a section.';
+      else close(pick.value);
+    };
+    return [h('h3', {}, icon('swap', 20), `Move ${who}`),
+      h('p', { class: 'muted' }, 'They get the next roll numbers at the end of the new section. Attendance already taken stays with the old section; marks stay with the student.'),
+      h('label', { class: 'f' }, 'New section'), pick, msg,
+      h('div', { class: 'dlg-actions' },
+        h('button', { onclick: () => close(null) }, 'Cancel'),
+        h('button', { class: 'primary', onclick: go }, 'Move'))];
+  });
+  if (!target) return false;
+  const { data, error } = await db().rpc('admin_move_students', { p_enrollments: rows.map((r) => r.id), p_section: target });
+  if (error) {
+    toast('Could not move: ' + errText(error), 'err');
+    return false;
+  }
+  const to = lab('sections', target);
+  toast(`${data.moved} moved to ${to}.` + (data.already_there ? ` ${data.already_there} ${data.already_there === 1 ? 'was' : 'were'} already there.` : ''));
+  return data.moved > 0;
 }
 
 // ---- delete -----------------------------------------------------------------------------
