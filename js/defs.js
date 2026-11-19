@@ -62,9 +62,10 @@ export const DEFS = {
     cols: [
       ['class_id', 'Class', 'fk:classes', { req: true, hint: 'Which class this section belongs to.' }],
       ['academic_year_id', 'Year', 'fk:academic_years', { req: true, hint: 'Sections are made again each school year.' }],
-      ['name', 'Section', 'text', { req: true, max: 30, ph: 'A', hint: 'Usually A, B, C… Use "A" if the class is not split.' }],
+      ['name', 'Section', 'text', { req: true, max: 30, ph: 'A', hint: 'Usually A, B, C… Use "A" if the class is not split. A group: e.g. "A · Computer".' }],
+      ['group_of', 'Group of', 'fk:sections', { hint: 'Leave empty for a normal section. For a group (part of the class taught apart in some periods), pick the section it belongs to. Its teacher chooses its students in the app.' }],
       ['created_by_teacher_id', 'Made by teacher', 'fk:teachers', { ro: true }]],
-    help: 'Create sections only where a class is split (A, B, C…). A class with one section still needs one section, e.g. "A". Students are enrolled into sections.', filter: 'academic_year_id' },
+    help: 'Create sections only where a class is split (A, B, C…). A class with one section still needs one section, e.g. "A". Students are enrolled into sections. A group (e.g. XI A · Computer) is part of a section taught apart in some periods: give it its own timetable periods; its teacher ticks its students in the app, and reports count it with its section.', filter: 'academic_year_id' },
   subjects: { title: 'Subjects', one: 'subject', icon: 'book',
     cols: [
       ['name', 'Name', 'text', { req: true, max: 60, ph: 'e.g. Mathematics', hint: 'Shown on attendance, timetable and marksheets.' }],

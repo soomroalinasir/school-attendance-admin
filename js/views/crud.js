@@ -421,7 +421,7 @@ export async function moveEnrollments(rows) {
     return false;
   }
   const [year] = years;
-  const choices = options('sections', (s) => s.academic_year_id === year);
+  const choices = options('sections', (s) => s.academic_year_id === year && !s.group_of); // students join classes, not groups
   const n = rows.length;
   const who = n === 1 ? (rows[0].students ? studentLabel(rows[0].students) : '1 student') : `${n} students`;
   const target = await modal((close) => {
