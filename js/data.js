@@ -22,7 +22,7 @@ export function errText(e) {
 const ORDER = {
   academic_years: 'start_date', classes: 'sort_order', sections: 'name', subjects: 'name', teachers: 'full_name',
   teaching_assignments: 'id', class_teacher_assignments: 'id', timetable_slots: 'period_no', timetable_entries: 'id',
-  holidays: 'date', app_users: 'created_at',
+  holidays: 'date', app_users: 'created_at', section_period_times: 'school_section',
 };
 const FETCH_CHUNK = 1000;
 
@@ -77,6 +77,7 @@ export const LABEL = {
   students: studentLabel,
   teaching_assignments: (r) => `${lab('sections', r.section_id)} · ${lab('subjects', r.subject_id)} · ${lab('teachers', r.teacher_id)}`,
   timetable_slots: (r) => `P${r.period_no} ${String(r.start_time).slice(0, 5)}`,
+  section_period_times: (r) => `${r.school_section} · ${lab('timetable_slots', r.timetable_slot_id)} → ${String(r.start_time).slice(0, 5)}`,
   // enrollment rows carry their student (embedded by the paged query)
   enrollments: (r) => `${studentLabel(r.students)} in ${lab('sections', r.section_id)}`,
   class_teacher_assignments: (r) => `${lab('teachers', r.teacher_id)} for ${lab('sections', r.section_id)}`,

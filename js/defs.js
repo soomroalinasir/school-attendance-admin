@@ -115,6 +115,14 @@ export const DEFS = {
       ['end_time', 'End', 'time', { req: true, hint: 'When it ends. Must be after the start.' }]],
     help: 'The periods of the school day, usually 8. Teachers pick a period when taking attendance. “Teachers” shows who teaches each period, from the weekly timetable.',
     needs: ['timetable_entries'], extra: ['Teachers', slotTeachers] },
+  section_period_times: { title: 'Section period times', one: 'section period time', icon: 'clock',
+    cols: [
+      ['school_section', 'School section', `select:${SCHOOL_SECTIONS.map(([v, l]) => `${v}=${l}`).join(',')}`, { req: true, hint: 'The classes of this school section use these times.' }],
+      ['timetable_slot_id', 'Period', 'fk:timetable_slots', { req: true, hint: 'The period whose time is different for this section.' }],
+      ['start_time', 'Start', 'time', { req: true, hint: 'When the period starts for this section.' }],
+      ['end_time', 'End', 'time', { req: true, hint: 'When it ends. Must be after the start.' }]],
+    help: 'For a school section whose day runs on other times, e.g. Early Childhood with its break at 10:00–10:30 (period 3 is then 10:30–11:10). Add only the periods whose time differs; the others keep the school’s times from “Periods”. Period numbers stay the same, so timetables are not affected.',
+    needs: ['timetable_slots'] },
   holidays: { title: 'Holidays', one: 'holiday', icon: 'sun',
     cols: [
       ['date', 'Date', 'date', { req: true, hint: 'The day off.' }],
@@ -129,7 +137,7 @@ export const SPECIAL_VIEWS = ['report', 'results', 'fixtures', 'logins', 'import
 
 export const NAV = [
   ['Daily', [['report', 'Daily report', 'fileText'], ['fixtures', 'Leave & fixtures', 'userX'], ['results', 'Results & marksheets', 'award']]],
-  ['Start of year', [['academic_years', 'Academic years', 'calendar'], ['classes', 'Classes', 'layers'], ['sections', 'Sections', 'grid'], ['subjects', 'Subjects', 'book'], ['timetable_slots', 'Periods', 'clock']]],
+  ['Start of year', [['academic_years', 'Academic years', 'calendar'], ['classes', 'Classes', 'layers'], ['sections', 'Sections', 'grid'], ['subjects', 'Subjects', 'book'], ['timetable_slots', 'Periods', 'clock'], ['section_period_times', 'Section period times', 'clock']]],
   ['People', [['teachers', 'Teachers', 'user'], ['logins', 'Logins', 'key'], ['students', 'Students', 'users'], ['import', 'Import students (CSV)', 'upload'], ['enrollments', 'Enrollments', 'clipboard']]],
   ['Timetable', [['teaching_assignments', 'Teaching assignments', 'link'], ['timetable', 'Weekly timetable', 'table'], ['class_teacher_assignments', 'Class teachers', 'star']]],
   ['Calendar & rules', [['holidays', 'Holidays', 'sun'], ['settings', 'School settings', 'sliders'], ['promotion', 'Year-end promotion', 'arrowUp']]],
