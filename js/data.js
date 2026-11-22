@@ -22,7 +22,7 @@ export function errText(e) {
 const ORDER = {
   academic_years: 'start_date', classes: 'sort_order', sections: 'name', subjects: 'name', teachers: 'full_name',
   teaching_assignments: 'id', class_teacher_assignments: 'id', timetable_slots: 'period_no', timetable_entries: 'id',
-  holidays: 'date', app_users: 'created_at', section_period_times: 'school_section',
+  holidays: 'date', app_users: 'created_at',
 };
 const FETCH_CHUNK = 1000;
 
@@ -53,6 +53,30 @@ export async function reload(...tables) {
 export const byId = (t, id) => index[t] && index[t].get(id);
 export const activeYear = () => (cache.academic_years || []).find((y) => y.is_active);
 
+/**
+ * Students studying now (active enrollments of the active year), per section and per class:
+ * cache.studentCounts = { section: Map(section id → n), class: Map(class id → n) }. Needs sections cached.
+ */
+export async function loadStudentCounts() {
+  if (!cache.academic_years) await reload('academic_years');
+  if (!cache.sections) await reload('sections');
+  const ay = activeYear();
+  const section = new Map();
+  for (let from = 0; ay; from += FETCH_CHUNK) {
+    const { data, error } = await client.from('enrollments').select('id, section_id, academic_year_id, status')
+      .eq('academic_year_id', ay.id).eq('status', 'active').order('id').range(from, from + FETCH_CHUNK - 1);
+    if (error) throw error;
+    for (const e of data) section.set(e.section_id, (section.get(e.section_id) || 0) + 1);
+    if (data.length < FETCH_CHUNK) break;
+  }
+  const cls = new Map();
+  for (const [id, n] of section) {
+    const s = byId('sections', id);
+    if (s) cls.set(s.class_id, (cls.get(s.class_id) || 0) + n);
+  }
+  cache.studentCounts = { section, class: cls };
+}
+
 /** Row counts of the big tables (the setup checklist needs "are there any students?"). */
 export const counts = {};
 export async function refreshCount(table) {
@@ -77,7 +101,6 @@ export const LABEL = {
   students: studentLabel,
   teaching_assignments: (r) => `${lab('sections', r.section_id)} · ${lab('subjects', r.subject_id)} · ${lab('teachers', r.teacher_id)}`,
   timetable_slots: (r) => `P${r.period_no} ${String(r.start_time).slice(0, 5)}`,
-  section_period_times: (r) => `${r.school_section} · ${lab('timetable_slots', r.timetable_slot_id)} → ${String(r.start_time).slice(0, 5)}`,
   // enrollment rows carry their student (embedded by the paged query)
   enrollments: (r) => `${studentLabel(r.students)} in ${lab('sections', r.section_id)}`,
   class_teacher_assignments: (r) => `${lab('teachers', r.teacher_id)} for ${lab('sections', r.section_id)}`,

@@ -8,6 +8,7 @@ import { fixturesView } from './views/fixtures.js';
 import { forgotPasswordView } from './views/forgot.js';
 import { importView } from './views/import.js';
 import { loginsView } from './views/logins.js';
+import { periodTimesView } from './views/period_times.js';
 import { promotionView } from './views/promotion.js';
 import { reportView } from './views/report.js';
 import { resultsView } from './views/results.js';
@@ -21,7 +22,7 @@ const STARTUP_TABLES = ['academic_years', 'classes', 'sections', 'subjects', 'te
 
 const VIEWS = {
   fixtures: fixturesView, logins: loginsView, import: importView, timetable: timetableView, settings: settingsView,
-  promotion: promotionView, report: reportView, results: resultsView,
+  promotion: promotionView, report: reportView, results: resultsView, period_times: periodTimesView,
 };
 export const isView = (v) => !!DEFS[v] || SPECIAL_VIEWS.includes(v);
 

@@ -80,6 +80,7 @@ export async function crudView(main, table) {
   const def = DEFS[table];
   if (isBig(table)) await refreshCount(table);
   else await reload(table, ...(def.needs || []));
+  if (def.load) await def.load(); // e.g. how many students each class has
   const source = isBig(table) ? pagedSource(table, def) : cachedSource(table, def);
 
   const fcol = def.filter && def.cols.find((c) => c[0] === def.filter);

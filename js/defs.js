@@ -6,7 +6,7 @@
 // Length limits are the database's (supabase/migrations/*_input_validation.sql); a test keeps them equal.
 import { h, icon } from './dom.js';
 import { DAYS } from './format.js';
-import { activeYear, byId, cache, counts, lab, router } from './data.js';
+import { activeYear, byId, cache, counts, lab, loadStudentCounts, router } from './data.js';
 
 export const PHONE = /^\+?[0-9][0-9 -]{6,18}[0-9]$/;
 export const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -16,6 +16,12 @@ export const SCHOOL_SECTIONS = [
 ];
 
 /** Who teaches in one period (time slot), from the active year's weekly timetable. */
+/** Students registered now in a class or section (0 when none); loaded by loadStudentCounts. */
+function studentCount(kind, id) {
+  const counts = cache.studentCounts;
+  return counts ? counts[kind].get(id) || 0 : '';
+}
+
 function slotTeachers(slot) {
   const ay = activeYear();
   const byTeacher = new Map();
@@ -57,7 +63,8 @@ export const DEFS = {
       ['level', 'Level', 'number', { int: true, ph: 'e.g. 6', hint: 'Optional number for the grade (Nursery = -1, KG = 0).' }],
       ['sort_order', 'Order', 'number', { int: true, ph: 'e.g. 7', hint: 'Lists are sorted by this number, and at year end students move to the class with the next number.' }],
       ['created_by_teacher_id', 'Made by teacher', 'fk:teachers', { ro: true }]],
-    help: 'Order decides promotion: students move to the class with the next order number. The school section decides who covers a fixture: a teacher of Early Childhood or Primary covers those two sections, a teacher of Middle or Secondary covers those two. Classes made by teachers on their phone are marked and never used for promotion.' },
+    help: 'Order decides promotion: students move to the class with the next order number. The school section decides who covers a fixture: a teacher of Early Childhood or Primary covers those two sections, a teacher of Middle or Secondary covers those two. Classes made by teachers on their phone are marked and never used for promotion. “Students” counts the students registered in the class this year (all its sections).',
+    needs: ['sections'], load: loadStudentCounts, extra: ['Students', (r) => studentCount('class', r.id)] },
   sections: { title: 'Sections', one: 'section', icon: 'grid',
     cols: [
       ['class_id', 'Class', 'fk:classes', { req: true, hint: 'Which class this section belongs to.' }],
@@ -65,7 +72,8 @@ export const DEFS = {
       ['name', 'Section', 'text', { req: true, max: 30, ph: 'A', hint: 'Usually A, B, C… Use "A" if the class is not split. A group: e.g. "A · Computer".' }],
       ['group_of', 'Group of', 'fk:sections', { hint: 'Leave empty for a normal section. For a group (part of the class taught apart in some periods), pick the section it belongs to. Its teacher chooses its students in the app.' }],
       ['created_by_teacher_id', 'Made by teacher', 'fk:teachers', { ro: true }]],
-    help: 'Create sections only where a class is split (A, B, C…). A class with one section still needs one section, e.g. "A". Students are enrolled into sections. A group (e.g. XI A · Computer) is part of a section taught apart in some periods: give it its own timetable periods; its teacher ticks its students in the app, and reports count it with its section.', filter: 'academic_year_id' },
+    help: 'Create sections only where a class is split (A, B, C…). A class with one section still needs one section, e.g. "A". Students are enrolled into sections. A group (e.g. XI A · Computer) is part of a section taught apart in some periods: give it its own timetable periods; its teacher ticks its students in the app, and reports count it with its section.', filter: 'academic_year_id',
+    load: loadStudentCounts, extra: ['Students', (r) => (r.group_of ? '—' : studentCount('section', r.id))] },
   subjects: { title: 'Subjects', one: 'subject', icon: 'book',
     cols: [
       ['name', 'Name', 'text', { req: true, max: 60, ph: 'e.g. Mathematics', hint: 'Shown on attendance, timetable and marksheets.' }],
@@ -115,14 +123,6 @@ export const DEFS = {
       ['end_time', 'End', 'time', { req: true, hint: 'When it ends. Must be after the start.' }]],
     help: 'The periods of the school day, usually 8. Teachers pick a period when taking attendance. “Teachers” shows who teaches each period, from the weekly timetable.',
     needs: ['timetable_entries'], extra: ['Teachers', slotTeachers] },
-  section_period_times: { title: 'Section period times', one: 'section period time', icon: 'clock',
-    cols: [
-      ['school_section', 'School section', `select:${SCHOOL_SECTIONS.map(([v, l]) => `${v}=${l}`).join(',')}`, { req: true, hint: 'The classes of this school section use these times.' }],
-      ['timetable_slot_id', 'Period', 'fk:timetable_slots', { req: true, hint: 'The period whose time is different for this section.' }],
-      ['start_time', 'Start', 'time', { req: true, hint: 'When the period starts for this section.' }],
-      ['end_time', 'End', 'time', { req: true, hint: 'When it ends. Must be after the start.' }]],
-    help: 'For a school section whose day runs on other times, e.g. Early Childhood with its break at 10:00–10:30 (period 3 is then 10:30–11:10). Add only the periods whose time differs; the others keep the school’s times from “Periods”. Period numbers stay the same, so timetables are not affected.',
-    needs: ['timetable_slots'] },
   holidays: { title: 'Holidays', one: 'holiday', icon: 'sun',
     cols: [
       ['date', 'Date', 'date', { req: true, hint: 'The day off.' }],
@@ -133,11 +133,11 @@ export const DEFS = {
 };
 
 /** Pages that are not a plain table, by id (the menu and #links use these). */
-export const SPECIAL_VIEWS = ['report', 'results', 'fixtures', 'logins', 'import', 'timetable', 'settings', 'promotion'];
+export const SPECIAL_VIEWS = ['report', 'results', 'fixtures', 'logins', 'import', 'timetable', 'settings', 'promotion', 'period_times'];
 
 export const NAV = [
   ['Daily', [['report', 'Daily report', 'fileText'], ['fixtures', 'Leave & fixtures', 'userX'], ['results', 'Results & marksheets', 'award']]],
-  ['Start of year', [['academic_years', 'Academic years', 'calendar'], ['classes', 'Classes', 'layers'], ['sections', 'Sections', 'grid'], ['subjects', 'Subjects', 'book'], ['timetable_slots', 'Periods', 'clock'], ['section_period_times', 'Section period times', 'clock']]],
+  ['Start of year', [['academic_years', 'Academic years', 'calendar'], ['classes', 'Classes', 'layers'], ['sections', 'Sections', 'grid'], ['subjects', 'Subjects', 'book'], ['timetable_slots', 'Periods', 'clock'], ['period_times', 'Period times by section', 'clock']]],
   ['People', [['teachers', 'Teachers', 'user'], ['logins', 'Logins', 'key'], ['students', 'Students', 'users'], ['import', 'Import students (CSV)', 'upload'], ['enrollments', 'Enrollments', 'clipboard']]],
   ['Timetable', [['teaching_assignments', 'Teaching assignments', 'link'], ['timetable', 'Weekly timetable', 'table'], ['class_teacher_assignments', 'Class teachers', 'star']]],
   ['Calendar & rules', [['holidays', 'Holidays', 'sun'], ['settings', 'School settings', 'sliders'], ['promotion', 'Year-end promotion', 'arrowUp']]],
