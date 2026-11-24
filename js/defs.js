@@ -71,6 +71,8 @@ export const DEFS = {
       ['academic_year_id', 'Year', 'fk:academic_years', { req: true, hint: 'Sections are made again each school year.' }],
       ['name', 'Section', 'text', { req: true, max: 30, ph: 'A', hint: 'Usually A, B, C… Use "A" if the class is not split. A group: e.g. "A · Computer".' }],
       ['group_of', 'Group of', 'fk:sections', { hint: 'Leave empty for a normal section. For a group (part of the class taught apart in some periods), pick the section it belongs to. Its teacher chooses its students in the app.' }],
+      ['subject_choice', 'Subject choice', 'text', { max: 60, ph: 'Biology / Mathematics', hint: 'Only for a group: what the class chooses between. Write it the same for every group of that choice, e.g. "Biology / Mathematics".' }],
+      ['subject_option', 'Subject in that choice', 'text', { max: 30, ph: 'Biology', hint: 'Only for a group: which side it is. Groups taken together (Botany, Zoology) have the same one, e.g. "Biology".' }],
       ['created_by_teacher_id', 'Made by teacher', 'fk:teachers', { ro: true }]],
     help: 'Create sections only where a class is split (A, B, C…). A class with one section still needs one section, e.g. "A". Students are enrolled into sections. A group (e.g. XI A · Computer) is part of a section taught apart in some periods: give it its own timetable periods; its teacher ticks its students in the app, and reports count it with its section.', filter: 'academic_year_id',
     load: loadStudentCounts, extra: ['Students', (r) => (r.group_of ? '—' : studentCount('section', r.id))] },
@@ -133,12 +135,12 @@ export const DEFS = {
 };
 
 /** Pages that are not a plain table, by id (the menu and #links use these). */
-export const SPECIAL_VIEWS = ['report', 'results', 'fixtures', 'logins', 'import', 'timetable', 'settings', 'promotion', 'period_times'];
+export const SPECIAL_VIEWS = ['report', 'results', 'fixtures', 'logins', 'import', 'timetable', 'settings', 'promotion', 'period_times', 'subject_allocation'];
 
 export const NAV = [
   ['Daily', [['report', 'Daily report', 'fileText'], ['fixtures', 'Leave & fixtures', 'userX'], ['results', 'Results & marksheets', 'award']]],
   ['Start of year', [['academic_years', 'Academic years', 'calendar'], ['classes', 'Classes', 'layers'], ['sections', 'Sections', 'grid'], ['subjects', 'Subjects', 'book'], ['timetable_slots', 'Periods', 'clock'], ['period_times', 'Period times by section', 'clock']]],
-  ['People', [['teachers', 'Teachers', 'user'], ['logins', 'Logins', 'key'], ['students', 'Students', 'users'], ['import', 'Import students (CSV)', 'upload'], ['enrollments', 'Enrollments', 'clipboard']]],
+  ['People', [['teachers', 'Teachers', 'user'], ['logins', 'Logins', 'key'], ['students', 'Students', 'users'], ['import', 'Import students (CSV)', 'upload'], ['enrollments', 'Enrollments', 'clipboard'], ['subject_allocation', 'Subject allocation', 'layers']]],
   ['Timetable', [['teaching_assignments', 'Teaching assignments', 'link'], ['timetable', 'Weekly timetable', 'table'], ['class_teacher_assignments', 'Class teachers', 'star']]],
   ['Calendar & rules', [['holidays', 'Holidays', 'sun'], ['settings', 'School settings', 'sliders'], ['promotion', 'Year-end promotion', 'arrowUp']]],
 ];

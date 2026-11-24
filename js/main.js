@@ -13,6 +13,7 @@ import { promotionView } from './views/promotion.js';
 import { reportView } from './views/report.js';
 import { resultsView } from './views/results.js';
 import { settingsView } from './views/settings.js';
+import { subjectAllocationView } from './views/subject_allocation.js';
 import { timetableView } from './views/timetable.js';
 
 const CFG_KEY = 'attendance_cfg';
@@ -23,6 +24,7 @@ const STARTUP_TABLES = ['academic_years', 'classes', 'sections', 'subjects', 'te
 const VIEWS = {
   fixtures: fixturesView, logins: loginsView, import: importView, timetable: timetableView, settings: settingsView,
   promotion: promotionView, report: reportView, results: resultsView, period_times: periodTimesView,
+  subject_allocation: subjectAllocationView,
 };
 export const isView = (v) => !!DEFS[v] || SPECIAL_VIEWS.includes(v);
 

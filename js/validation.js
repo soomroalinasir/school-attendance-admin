@@ -25,6 +25,11 @@ export function fieldProblem(col, raw) {
   return null;
 }
 
+const SPECIAL_CHECKS = {
+  chk_sections_subject_choice_pair: 'Fill in both “Subject choice” and “Subject in that choice”, or leave both empty.',
+  chk_sections_subject_choice_group: 'Only a group can have a subject choice: pick its section under “Group of” first.',
+};
+
 const humanize = (column) => column.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
 /**
@@ -35,6 +40,7 @@ export function describeDbError(error, table, cols = []) {
   const message = errText(error);
   const found = /\b(chk_[a-z0-9_]+)\b/.exec(`${message} ${(error && error.details) || ''}`);
   if (found) {
+    if (SPECIAL_CHECKS[found[1]]) return SPECIAL_CHECKS[found[1]];
     const rule = /^chk_(.+)_(max(\d+)|blank|format|range)$/.exec(found[1]);
     if (rule) {
       const column = table && rule[1].startsWith(`${table}_`) ? rule[1].slice(table.length + 1) : rule[1];
