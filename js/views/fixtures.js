@@ -108,30 +108,59 @@ function leaveForm(day, editing) {
     h('p', {}, save, editing && h('button', { class: 'link', onclick: () => { ui.fixtureEdit = null; router.render(); } }, 'Cancel')));
 }
 
+export const STEP_TEXT = { 1: 'teaches this class', 2: 'same section', 3: 'other section of the group' };
+
+/** Sets a fixture's substitute (null = Physical Activity) and redraws the page. */
+async function setFixture(f, teacherId) {
+  await rpc('admin_set_fixture', { p_fixture: f.id, p_teacher: teacherId });
+  toast(teacherId ? 'Fixture changed.' : `P${f.period_no} is now ${PHYSICAL_ACTIVITY}.`);
+  router.render();
+}
+
+/** The three best choices for a fixture, as buttons: name, step, classes that day, fixtures this week. */
+function bestChoices(f) {
+  const best = (f.choices || []).slice(0, 3);
+  if (!best.length) return h('div', { class: 'muted', style: 'font-size:12px' }, 'Nobody free in this period by the rules.');
+  return h('div', { class: 'best-choices' }, h('span', { class: 'muted', style: 'font-size:12px' }, 'Best: '),
+    best.map((c, i) => h('button', {
+      class: 'link' + (c.teacher_id === f.substitute_teacher_id ? ' chosen' : ''),
+      title: `${STEP_TEXT[c.step]} · ${plural(c.load, 'class', 'classes')} that day · ${plural(c.week_fixtures, 'fixture')} this week`,
+      'aria-label': `Give P${f.period_no} ${f.class_name} ${f.section_name} to ${c.name}`,
+      onclick: async () => {
+        try {
+          await setFixture(f, c.teacher_id);
+        } catch (e) {
+          toast(describeDbError(e, 'fixtures'), 'err');
+        }
+      },
+    }, `${i + 1}. ${c.name} (${c.load}/${c.week_fixtures})`)));
+}
+
 /**
- * Who can take a fixture: free teachers of the class's section group first (fewest classes), then free
- * teachers of the other sections (allowed, but marked), then the busy ones (disabled).
+ * Who can take a fixture: the choices by the school's rules first, best first (same class, same section,
+ * other section of the group; lowest load; fewest fixtures this week), then other free teachers (allowed,
+ * but marked), then the busy ones (disabled).
  */
 function substituteSelect(f, day) {
+  const rank = new Map((f.choices || []).map((c, i) => [c.teacher_id, { i, c }]));
   const options = day.teachers
     .filter((t) => t.id !== f.absent_teacher_id)
     .map((t) => {
       const current = t.id === f.substitute_teacher_id;
       const free = current || freeAt(t, f.period_no, day.leaves);
-      const same = !f.group || (t.groups || []).includes(f.group);
-      const load = t.busy.length - (current ? 1 : 0);
-      const label = `${t.name} — ${plural(load, 'class', 'classes')}` + (!free ? ' (busy)' : same ? '' : ' (other section)');
-      return { t, free, same, load, label };
+      const r = rank.get(t.id);
+      const load = r ? r.c.load : t.busy.length - (current ? 1 : 0);
+      const label = `${t.name} — ${plural(load, 'class', 'classes')}`
+        + (r ? `, ${plural(r.c.week_fixtures, 'fixture')} this week · ${STEP_TEXT[r.c.step]}` : !free ? ' (busy)' : ' (not by the rules)');
+      return { t, free, order: r ? r.i : 1000, label };
     })
-    .sort((a, b) => (b.free - a.free) || (b.same - a.same) || (a.load - b.load) || a.t.name.localeCompare(b.t.name));
+    .sort((a, b) => (b.free - a.free) || (a.order - b.order) || a.t.name.localeCompare(b.t.name));
   const sel = h('select', { value: f.substitute_teacher_id || '', 'aria-label': `Substitute for P${f.period_no} ${f.class_name} ${f.section_name}` },
     h('option', { value: '' }, PHYSICAL_ACTIVITY),
     options.map((o) => h('option', { value: o.t.id, disabled: !o.free }, o.label)));
   sel.addEventListener('change', async () => {
     try {
-      await rpc('admin_set_fixture', { p_fixture: f.id, p_teacher: sel.value || null });
-      toast(sel.value ? 'Fixture changed.' : `P${f.period_no} is now ${PHYSICAL_ACTIVITY}.`);
-      router.render();
+      await setFixture(f, sel.value || null);
     } catch (e) {
       sel.value = f.substitute_teacher_id || '';
       toast(describeDbError(e, 'fixtures'), 'err');
@@ -228,7 +257,7 @@ export async function fixturesView(main) {
       h('button', { 'aria-label': 'Previous day', onclick: () => step(-1) }, icon('chevronLeft', 16)), dateInput,
       h('button', { 'aria-label': 'Next day', onclick: () => step(1) }, icon('chevronRight', 16))),
     h('p', { class: 'help' }, prettyDate(day.date) + '. ',
-      'Each period of a teacher on leave goes to a teacher of the same sections who is free then, with the fewest classes that day: Early Childhood and Primary teachers cover each other, and Middle and Secondary teachers cover each other. Two classes in a row are fine, three never. When equal: no class next to it first, then the fewest fixtures this month. ',
+      'Each period of a teacher on leave goes first to a teacher of that same class, then to a teacher of the same section, then to one of the other section of its group (Secondary ↔ Middle, Early Childhood ↔ Primary; never further). Within each step: the lowest load that day, then the fewest fixtures this week. The teacher must be free then; two classes in a row are fine, three never. ',
       `If nobody is free the class has ${PHYSICAL_ACTIVITY}. You can change any fixture below.`),
     day.classes_without_section > 0 && h('div', { class: 'banner' }, icon('alert'),
       h('span', {}, `${plural(day.classes_without_section, 'class has', 'classes have')} no school section yet, so any teacher can cover them.`),
@@ -259,9 +288,17 @@ export async function fixturesView(main) {
           h('td', {}, `${f.class_name} ${f.section_name}`),
           h('td', {}, f.subject_name),
           h('td', {}, f.absent_teacher),
-          h('td', {}, substituteSelect(f, day)),
+          h('td', {}, substituteSelect(f, day), bestChoices(f)),
           h('td', {},
             f.assigned_by === 'admin' && h('span', { class: 'pill' }, 'changed by admin'),
             f.attendance_taken && h('span', { class: 'pill', style: 'margin-left:4px' }, 'attendance taken')))))))
-      : h('p', { class: 'muted' }, 'No fixtures on this day.'));
+      : h('p', { class: 'muted' }, 'No fixtures on this day.'),
+
+    day.week && h('h3', { class: 'sec' }, icon('calendar'), `Fixtures this week (${prettyDate(day.week.from)} – ${prettyDate(day.week.to)})`),
+    day.week && (day.week.teachers.length
+      ? h('div', { class: 'scroll' }, h('table', {},
+        h('thead', {}, h('tr', {}, ['Teacher', 'Fixtures this week'].map((x) => h('th', {}, x)))),
+        h('tbody', {}, day.week.teachers.map((w) => h('tr', {}, h('td', {}, w.name), h('td', {}, String(w.fixtures)))))))
+      : h('p', { class: 'muted' }, 'No fixtures this week yet.')),
+    h('p', { class: 'help' }, 'Best choices show (classes that day / fixtures this week). Fixtures are shared out so the same teachers are not chosen again and again.'));
 }

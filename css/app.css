@@ -156,3 +156,7 @@ tr.pe-row td { background:#fff8e1; }
   .search { flex:1; }
   .act span { display:none; }
 }
+
+.best-choices { margin-top: 4px; font-size: 12px; display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; }
+.best-choices .link { font-size: 12px; padding: 0; }
+.best-choices .chosen { font-weight: 700; }
