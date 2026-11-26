@@ -1,7 +1,7 @@
 // Daily report: school totals, class-wise counts with absent names, students who left after the
 // first period, and which periods were (not) submitted, for one date. Downloadable as a PDF.
 import { fill, h, icon, title } from '../dom.js';
-import { prettyDate, pct, roll, timeOf, todayYmd, ymdOf } from '../format.js';
+import { notMarked, prettyDate, pct, roll, timeOf, todayYmd, ymdOf } from '../format.js';
 import { kpi, toast } from '../ui.js';
 import { db, errText, router, ui } from '../data.js';
 import { downloadDailyReport } from '../pdf.js';
@@ -64,23 +64,25 @@ export async function reportView(main) {
       h('button', { title: 'Previous day', 'aria-label': 'Previous day', onclick: () => step(-1) }, icon('chevronLeft', 16)), dateInput,
       h('button', { title: 'Next day', 'aria-label': 'Next day', disabled: d.date >= today, onclick: () => step(1) }, icon('chevronRight', 16)),
       pdfBtn),
-    h('p', { class: 'help' }, prettyDate(d.date) + '. Day attendance comes from the first period. “Left later” means present in the first period but absent in a later one.'),
+    h('p', { class: 'help' }, prettyDate(d.date) + '. Day attendance comes from the first period taken. Attendance % = present ÷ all registered students (absent, on leave and not marked are not present). “Left later” means present in the first period but absent in a later one.'),
     s.holiday && h('div', { class: 'banner' }, icon('sun'), 'This day is a school holiday.'),
     h('div', { class: 'kpis' },
       kpi('Students', s.total_students),
       kpi('Present', s.students_present_day, 'good'),
       kpi('Absent', s.students_absent_day, s.students_absent_day ? 'bad' : ''),
       kpi('On leave', s.students_leave_day),
+      kpi('Not marked', notMarked(s.total_students, s.students_present_day, s.students_absent_day, s.students_leave_day)),
       kpi('Left later periods', s.bunk_students, s.bunk_students ? 'warn' : ''),
       kpi('Attendance', pct(s.present_pct), 'good'),
       kpi('Periods taken', `${s.submitted_periods} / ${s.scheduled_periods}`, s.submitted_periods < s.scheduled_periods ? 'warn' : 'good')),
 
     h('h3', { class: 'sec' }, icon('layers'), 'Class-wise'),
     d.classes.length
-      ? table(['Class', 'Students', 'Present', 'Absent', 'Leave', '%', 'Periods taken', 'Absent students'],
+      ? table(['Class', 'Students', 'Present', 'Absent', 'Leave', 'Not marked', '%', 'Periods taken', 'Absent students'],
         d.classes.map((c) => h('tr', {},
           h('td', {}, h('b', {}, sectionName(c))),
           h('td', {}, c.students), h('td', {}, c.present_students), h('td', {}, c.absent_students), h('td', {}, c.leave_students),
+          h('td', {}, notMarked(c.students, c.present_students, c.absent_students, c.leave_students)),
           h('td', {}, pct(c.present_pct)),
           h('td', {}, h('span', { class: 'pill' + (Number(c.submitted) < Number(c.scheduled) ? ' off' : '') }, `${c.submitted}/${c.scheduled}`)),
           h('td', { class: 'names' }, c.absent_list.map(roll).join(', ') || '—'))))

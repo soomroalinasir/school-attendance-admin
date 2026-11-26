@@ -2,7 +2,7 @@
 // The builders take the jsPDF class (with the autoTable plugin) and return the document, so tests can
 // run them in Node; the download functions load the library from the CDN once and save the file.
 import { h } from './dom.js';
-import { num, prettyDate, roll, timeOf } from './format.js';
+import { notMarked, num, prettyDate, roll, timeOf } from './format.js';
 import { LOGO_ASPECT, LOGO_URL, logoPng, MARK_ASPECT, MARK_URL, SCHOOL_NAME } from './brand.js';
 
 const JSPDF_URL = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
@@ -86,20 +86,21 @@ export function buildDailyReport(JsPdf, d, mark = null) {
   };
   const sectionName = (x) => `${x.class_name} ${x.section_name}`;
 
-  table({ startY: 92, head: [['Students', 'Present', 'Absent', 'On leave', 'Left later periods', 'Attendance', 'Periods taken']],
-    body: [[s.total_students, s.students_present_day, s.students_absent_day, s.students_leave_day, s.bunk_students,
+  table({ startY: 92, head: [['Students', 'Present', 'Absent', 'On leave', 'Not marked', 'Left later periods', 'Attendance', 'Periods taken']],
+    body: [[s.total_students, s.students_present_day, s.students_absent_day, s.students_leave_day,
+      notMarked(s.total_students, s.students_present_day, s.students_absent_day, s.students_leave_day), s.bunk_students,
       pctText(s.present_pct), `${s.submitted_periods} / ${s.scheduled_periods}`]],
     styles: { fontSize: 11, halign: 'center', cellPadding: 6 } });
 
   table({ startY: heading('Class-wise', after() + 24),
-    head: [['Class', 'Students', 'Present', 'Absent', 'Leave', '%', 'Periods', 'Absent students']],
+    head: [['Class', 'Students', 'Present', 'Absent', 'Leave', 'Not marked', '%', 'Periods', 'Absent students']],
     body: d.classes.length
       ? d.classes.map((c) => [sectionName(c), c.students, c.present_students, c.absent_students,
-        c.leave_students, pctText(c.present_pct), `${c.submitted}/${c.scheduled}`, c.absent_list.map(roll).join(', ') || DASH])
-      : [[{ content: 'No sections in the active year.', colSpan: 8 }]],
+        c.leave_students, notMarked(c.students, c.present_students, c.absent_students, c.leave_students), pctText(c.present_pct), `${c.submitted}/${c.scheduled}`, c.absent_list.map(roll).join(', ') || DASH])
+      : [[{ content: 'No sections in the active year.', colSpan: 9 }]],
     columnStyles: { 0: { fontStyle: 'bold', cellWidth: 90 }, 1: { halign: 'center', cellWidth: 52 }, 2: { halign: 'center', cellWidth: 48 },
-      3: { halign: 'center', cellWidth: 48 }, 4: { halign: 'center', cellWidth: 42 }, 5: { halign: 'center', cellWidth: 44 },
-      6: { halign: 'center', cellWidth: 52 } } });
+      3: { halign: 'center', cellWidth: 48 }, 4: { halign: 'center', cellWidth: 42 }, 5: { halign: 'center', cellWidth: 46 },
+      6: { halign: 'center', cellWidth: 44 }, 7: { halign: 'center', cellWidth: 52 } } });
 
   const bunks = d.classes.flatMap((c) => c.bunk_list.map((b) => [sectionName(c), roll(b),
     b.periods.map((p) => `P${p.period_no} ${p.subject}`).join(', ')]));

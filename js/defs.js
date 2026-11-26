@@ -88,7 +88,7 @@ export const DEFS = {
       ['phone', 'Phone', 'text', { max: 20, pattern: PHONE, patternMsg: 'Phone must be digits, e.g. 03001234567 or +923001234567.', ph: '+923001234567', hint: 'Optional. Shown to the admin for periods with missing attendance.' }],
       ['email', 'Email', 'text', { max: 254, pattern: EMAIL, patternMsg: 'That email address does not look right.', ph: 'name@school.pk', hint: 'Optional. Used to fill in the login form.' }],
       ['is_active', 'Active', 'bool', { hint: 'Untick when a teacher leaves; their phone stops syncing.' }]],
-    help: 'After adding a teacher, create their sign-in under “Logins”. Any teacher can take attendance in any class.' },
+    help: 'After adding a teacher, create their sign-in under “Logins”. Teachers take attendance in their own periods on the weekly timetable and in their fixtures.' },
   students: { title: 'Students', one: 'student', icon: 'users', big: true,
     cols: [
       ['admission_no', 'Admission no.', 'text', { req: true, max: 30, ph: 'e.g. 1122', hint: 'Must be unique for every student.' }],
@@ -111,7 +111,7 @@ export const DEFS = {
       ['section_id', 'Section', 'fk:sections', { req: true, hint: 'The class and section taught.' }],
       ['subject_id', 'Subject', 'fk:subjects', { req: true, hint: 'The subject taught to this section.' }],
       ['teacher_id', 'Teacher', 'fk:teachers', { req: true, hint: 'The usual teacher for this subject.' }]],
-    help: 'Who normally teaches which subject to which section. Put them on the weekly timetable so the period shows on the teacher’s “Today” list. (Teachers can still take attendance in any class.)', filter: 'section_id' },
+    help: 'Who normally teaches which subject to which section. Put them on the weekly timetable so the period shows on the teacher’s “Today” list. A teacher can take attendance only in their own periods and the fixtures they cover.', filter: 'section_id' },
   class_teacher_assignments: { title: 'Class teachers', one: 'class teacher', icon: 'star',
     cols: [
       ['academic_year_id', 'Year', 'fk:academic_years', { req: true, hint: 'Usually the active year.' }],

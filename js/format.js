@@ -16,6 +16,8 @@ export const hhmm = (t) => String(t).slice(0, 5);
 
 export const pct = (v) => (v == null ? '–' : `${v}%`);
 export const num = (v) => (v == null ? '' : String(Number(v)));
+/** Students of a class (or the school) nobody has marked that day. */
+export const notMarked = (students, ...marked) => Math.max(0, Number(students) - marked.reduce((n, x) => n + Number(x || 0), 0));
 /** "4. Ali Raza" when there is a roll number. */
 export const roll = (s) => (s.roll_no != null ? `${s.roll_no}. ` : '') + s.full_name;
 export const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
